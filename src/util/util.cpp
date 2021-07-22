@@ -15,34 +15,28 @@
  *******************************************************************/
 #include "util.h"
 
-string& trim(std::string &s) 
-{
-    if (s.empty()) 
-    {
+string &trim(std::string &s) {
+    if (s.empty()) {
         return s;
     }
- 
-    s.erase(0,s.find_first_not_of(" "));
+
+    s.erase(0, s.find_first_not_of(" "));
     s.erase(s.find_last_not_of(" ") + 1);
     return s;
 }
 
-void readParaFile(map<string, string> &paraMap, const char *fileName)
-{
+void readParaFile(map <string, string> &paraMap, const char *fileName) {
     ifstream ifs(fileName, ios::in);
 
-    if (!ifs)
-    {
+    if (!ifs) {
         fprintf(stderr, "Open parameterfile [ %s ] failed\n", fileName);
         abort();
     }
 
     string s;
-    while (getline(ifs, s))
-    {
+    while (getline(ifs, s)) {
         size_t pos = s.find_first_of("=");
-        if(pos == string::npos)
-        {
+        if (pos == string::npos) {
             fprintf(stderr, "Error: No '=' found in [%s] in parameter file [%s]\n", s.c_str(), fileName);
         }
         string key = s.substr(0, pos);
@@ -53,16 +47,13 @@ void readParaFile(map<string, string> &paraMap, const char *fileName)
     }
 }
 
-string getPara(map<string, string> paraMap, string key)
-{
+string getPara(map <string, string> paraMap, string key) {
     return "";
 }
 
-void getAllParas(map<string, string> paraMap)
-{
+void getAllParas(map <string, string> paraMap) {
     map<string, string>::iterator iter;
-    for(iter = paraMap.begin(); iter != paraMap.end(); iter ++)
-    {
-        cout<<iter->first << "=" << iter->second<<endl;
+    for (iter = paraMap.begin(); iter != paraMap.end(); iter++) {
+        cout << iter->first << "=" << iter->second << endl;
     }
 }

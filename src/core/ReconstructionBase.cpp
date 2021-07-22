@@ -16,8 +16,7 @@
 
 #include "ReconstructionBase.h"
 
-ReconstructionBase::~ReconstructionBase()
-{
+ReconstructionBase::~ReconstructionBase() {
 
 }
 
