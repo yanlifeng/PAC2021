@@ -25,7 +25,7 @@
 #ifdef _OPENMP
 #include "omp.h"
 
-const int threadNumber = 4;
+const int threadNumber = 24;
 #endif
 
 
@@ -764,7 +764,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
                     // loop: Ny (number of xz-slices)
 #ifdef _OPENMP
-                    #pragma omp parallel for num_threads(threadNumber)
+#pragma omp parallel for num_threads(threadNumber)
 #endif
                     for (int j = 0; j < stack_orig.getNy(); j++) {
                         float *recon_now = new float[stack_orig.getNx() * h];   // 第一维x，第二维z
