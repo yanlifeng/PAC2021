@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles/FFTW"
+		},
+		{
+			"file" : "/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles/FFTW.rule"
+		},
+		{
+			"file" : "/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles/FFTW-complete.rule"
+		},
+		{
+			"file" : "/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/FFTW-prefix/src/FFTW-stamp/FFTW-install.rule"
+		},
+		{
+			"file" : "/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/FFTW-prefix/src/FFTW-stamp/FFTW-mkdir.rule"
+		},
+		{
+			"file" : "/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/FFTW-prefix/src/FFTW-stamp/FFTW-download.rule"
+		},
+		{
+			"file" : "/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/FFTW-prefix/src/FFTW-stamp/FFTW-update.rule"
+		},
+		{
+			"file" : "/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/FFTW-prefix/src/FFTW-stamp/FFTW-patch.rule"
+		},
+		{
+			"file" : "/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/FFTW-prefix/src/FFTW-stamp/FFTW-configure.rule"
+		},
+		{
+			"file" : "/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/FFTW-prefix/src/FFTW-stamp/FFTW-build.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"FFTW"
+		],
+		"name" : "FFTW"
+	}
+}

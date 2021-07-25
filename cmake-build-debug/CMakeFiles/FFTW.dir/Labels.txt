@@ -1,0 +1,13 @@
+# Target labels
+ FFTW
+# Source files and their labels
+/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles/FFTW
+/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles/FFTW.rule
+/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles/FFTW-complete.rule
+/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/FFTW-prefix/src/FFTW-stamp/FFTW-install.rule
+/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/FFTW-prefix/src/FFTW-stamp/FFTW-mkdir.rule
+/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/FFTW-prefix/src/FFTW-stamp/FFTW-download.rule
+/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/FFTW-prefix/src/FFTW-stamp/FFTW-update.rule
+/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/FFTW-prefix/src/FFTW-stamp/FFTW-patch.rule
+/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/FFTW-prefix/src/FFTW-stamp/FFTW-configure.rule
+/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/FFTW-prefix/src/FFTW-stamp/FFTW-build.rule

@@ -1,0 +1,16 @@
+/Applications/CLion.app/Contents/bin/cmake/mac/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=/usr/local/Cellar/gcc@9/9.3.0_1/bin/gcc-9 -DCMAKE_CXX_COMPILER=/usr/local/Cellar/gcc@9/9.3.0_1/bin/g++-9 -G "CodeBlocks - Unix Makefiles" /Users/zhaozhan/CLionProjects/pac2021_publish/WBP
+fatal: not a git repository (or any of the parent directories): .git
+-- Welcome to TomoProject 0.1.20201014!
+-- Try to build Tomo-Project in CPU version.
+-- CMAKE_C_FLAGS : -std=c++11  -lz -lpthread -lm -qopenmp
+-- CMAKE_CXX_FLAGS : -std=c++11  -lz -lpthread -lm -qopenmp
+-- FFTW_FLAGS : --disable-doc;--enable-threads;--enable-float;--prefix=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7
+-- FFTW_LIBRARIES : /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7/lib/libfftw3f.a;/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7/lib/libfftw3f_threads.a
+-- FFTW Path: /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug
+Cannot resolve compiler path 'icpc'
+Cannot resolve compiler path 'icpc'
+Cannot resolve compiler path 'icpc'
+Cannot resolve compiler path 'icpc'

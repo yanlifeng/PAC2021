@@ -1,0 +1,2 @@
+/usr/bin/ar qc libcore_CPU.a  CMakeFiles/core_CPU.dir/src/core/AlignmentBase.cpp.o CMakeFiles/core_CPU.dir/src/core/CTF.cpp.o CMakeFiles/core_CPU.dir/src/core/CTFAlgo.cpp.o CMakeFiles/core_CPU.dir/src/core/CTFBase.cpp.o CMakeFiles/core_CPU.dir/src/core/ReconstructionAlgo_WBP_RAM.cpp.o CMakeFiles/core_CPU.dir/src/core/ReconstructionBase.cpp.o CMakeFiles/core_CPU.dir/src/core/mrc.cpp.o
+/usr/bin/ranlib libcore_CPU.a

@@ -1,0 +1,10 @@
+# Hashes of file build rules.
+5e85bfc8e87fb3787567700bd5a56ea5 CMakeFiles/FFTW
+abd388fcf4ba724fc9433f5da0a8619f CMakeFiles/FFTW-complete
+e3cef56d4174c4e697988328d5c5ea00 FFTW-prefix/src/FFTW-stamp/FFTW-build
+317d353806e5e06b3010041f89b7dd26 FFTW-prefix/src/FFTW-stamp/FFTW-configure
+43bf027326dd9fc9627bffb92c0eca82 FFTW-prefix/src/FFTW-stamp/FFTW-download
+0218814abb32716227687740a73cd5cc FFTW-prefix/src/FFTW-stamp/FFTW-install
+f52b52fb4ee543f9e6baf79f2b644b20 FFTW-prefix/src/FFTW-stamp/FFTW-mkdir
+046341bfe7ab9617440f644f99328ac4 FFTW-prefix/src/FFTW-stamp/FFTW-patch
+9fbfde938c66bb418ef81f831724a5e2 FFTW-prefix/src/FFTW-stamp/FFTW-update
