@@ -22,11 +22,9 @@
 #include "util.h"
 #include <sys/time.h>
 
-#ifdef _OPENMP
 #include "omp.h"
 
-const int threadNumber = 24;
-#endif
+const int threadNumber = 128;
 
 
 double GetTime() {
@@ -574,6 +572,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
         t0 = GetTime();
 
+        cout << "range " << stack_orig.getNx() << " " << stack_orig.getNy() << " " << stack_orig.getNz() << endl;
+
         for (int n = 0; n < stack_orig.getNz(); n++)   // loop for every micrograph
         {
             t1 = GetTime();
@@ -731,23 +731,68 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     cout << "\tStart 3D-CTF correction..." << endl;
                     t2 = GetTime();
 
+                    int Nx = stack_orig.getNx();
+                    int Ny = stack_orig.getNy();
+
+                    //把第一波fft操作拿出来，预处理好放到bufc_pre中
+                    float *image_pre;
+                    image_pre = new float[Nx * Ny];
+                    memcpy(image_pre, image_now, sizeof(float) * Nx * Ny);
+                    float *bufc_pre = new float[(Nx + 2 - Nx % 2) * Ny];
+
+                    fftwf_plan plan_fft_pre = fftwf_plan_dft_r2c_2d(Ny, Nx, (float *) bufc_pre,
+                                                                    reinterpret_cast<fftwf_complex *>(bufc_pre),
+                                                                    FFTW_ESTIMATE);
+                    buf2fft(image_pre, bufc_pre, Nx, Ny);
+                    fftwf_execute(plan_fft_pre);
+                    fftwf_destroy_plan(plan_fft_pre);
+
+
+                    int n_zz_thread[threadNumber];
+                    float *bufc_thread[threadNumber];
+                    fftwf_plan plan_ifft[threadNumber];
+                    for (int i = 0; i < threadNumber; i++) {
+                        n_zz_thread[i] = 0;
+                        bufc_thread[i] = new float[(Nx + 2 - Nx % 2) * Ny];
+                        plan_ifft[i] = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(bufc_thread[i]),
+                                                             (float *) bufc_thread[i], FFTW_ESTIMATE);
+                    }
                     //loop: number of blocks (for 3D-CTF correction)
-#ifdef _OPENMP
-                    printf("now omp\n");
 #pragma omp parallel for num_threads(threadNumber)
-#endif
                     for (int zz = -int(h_tilt_max / 2); zz < int(h_tilt_max / 2); zz += defocus_step)
                         // loop over every height (correct with different defocus)
                     {
+                        int thread_id = omp_get_thread_num();
 
                         int n_z = (zz + int(h_tilt_max / 2)) / defocus_step;
-                        stack_corrected[n_z] = new float[stack_orig.getNx() * stack_orig.getNy()];
-                        memcpy(stack_corrected[n_z], image_now,
-                               sizeof(float) * stack_orig.getNx() * stack_orig.getNy());
-                        ctf_correction(stack_corrected[n_z], stack_orig.getNx(), stack_orig.getNy(), ctf_para[n],
-                                       flip_contrast, float(zz) + float(defocus_step - 1) / 2);
-                        n_zz++;
+                        stack_corrected[n_z] = new float[Nx * Ny];
+                        float *image = stack_corrected[n_z];
+                        CTF ctf = ctf_para[n];
+                        float z_offset = float(zz) + float(defocus_step - 1) / 2;
+                        memcpy(bufc_thread[thread_id], bufc_pre, sizeof(float) * ((Nx + 2 - Nx % 2) * Ny));
+
+                        // loop: Ny (all Fourier components for y-axis)
+                        for (int j = 0; j < Ny; j++) {
+                            // loop: Nx+2-Nx%2 (all Fourier components for x-axis)
+                            for (int i = 0; i < (Nx + 2 - Nx % 2); i += 2) {
+                                float ctf_now = ctf.computeCTF2D(i / 2, j, Nx, Ny, true, flip_contrast, z_offset);
+                                bufc_thread[thread_id][i + j * (Nx + 2 - Nx % 2)] *= ctf_now;
+                                bufc_thread[thread_id][(i + 1) + j * (Nx + 2 - Nx % 2)] *= ctf_now;
+                            }
+                        }
+                        fftwf_execute(plan_ifft[thread_id]);
+                        fft2buf(image, bufc_thread[thread_id], Nx, Ny);
+                        for (int i = 0; i < Nx * Ny; i++)image[i] = image[i] / (Nx * Ny);
+                        n_zz_thread[thread_id]++;
+
                     }
+                    for (int i = 0; i < threadNumber; i++) {
+                        n_zz += n_zz_thread[i];
+                        delete[] bufc_thread[i];
+                        fftwf_destroy_plan(plan_ifft[i]);
+                    }
+                    delete[] bufc_pre;
+
 
                     t3 = GetTime();
                     printf("3DF cost %.3f\n", t3 - t2);
@@ -766,17 +811,17 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 #ifdef _OPENMP
 #pragma omp parallel for num_threads(threadNumber)
 #endif
-                    for (int j = 0; j < stack_orig.getNy(); j++) {
-                        float *recon_now = new float[stack_orig.getNx() * h];   // 第一维x，第二维z
+                    for (int j = 0; j < Ny; j++) {
+                        float *recon_now = new float[Nx * h];   // 第一维x，第二维z
 
                         // BP
                         // loop: Nx*h (whole xz-slice)
-                        for (int i = 0; i < stack_orig.getNx() * h; i++) {
+                        for (int i = 0; i < Nx * h; i++) {
                             recon_now[i] = 0.0;
                         }
                         // loop: Nx*h (whole xz-slice)
                         for (int k = 0; k < h; k++) {
-                            for (int i = 0; i < stack_orig.getNx(); i++)   // loop for the xz-plane to perform BP
+                            for (int i = 0; i < Nx; i++)   // loop for the xz-plane to perform BP
                             {
                                 float x_orig = (float(i) - x_orig_offset) * cos(theta_rad) -
                                                (float(k) - z_orig_offset) * sin(theta_rad) + x_orig_offset;
@@ -786,23 +831,23 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 int n_z = floor(((z_orig - z_orig_offset) + int(h_tilt_max / 2)) /
                                                 defocus_step);    // the num in the corrected stack for the current height
                                 if (n_z >= 0 && n_z < n_zz) {
-                                    if (floor(x_orig) >= 0 && ceil(x_orig) < stack_orig.getNx()) {
-                                        recon_now[i + k * stack_orig.getNx()] = (1 - coeff) * stack_corrected[n_z][
-                                                j * stack_orig.getNx() + int(floor(x_orig))] + (coeff) *
-                                                                                               stack_corrected[n_z][j *
-                                                                                                                    stack_orig.getNx() +
-                                                                                                                    int(ceil(
-                                                                                                                            x_orig))];
+                                    if (floor(x_orig) >= 0 && ceil(x_orig) < Nx) {
+                                        recon_now[i + k * Nx] = (1 - coeff) * stack_corrected[n_z][
+                                                j * Nx + int(floor(x_orig))] + (coeff) *
+                                                                               stack_corrected[n_z][j *
+                                                                                                    Nx +
+                                                                                                    int(ceil(
+                                                                                                            x_orig))];
                                     } else {
-                                        recon_now[i + k * stack_orig.getNx()] = 0.0;
+                                        recon_now[i + k * Nx] = 0.0;
                                     }
                                 } else {
-                                    recon_now[i + k * stack_orig.getNx()] = 0.0;
+                                    recon_now[i + k * Nx] = 0.0;
                                 }
                             }
                         }
                         // loop: Nx*h (whole xz-slice)
-                        for (int i = 0; i < stack_orig.getNx() * h; i++) {
+                        for (int i = 0; i < Nx * h; i++) {
                             stack_recon[j][i] += recon_now[i];
                         }
                         delete[] recon_now;

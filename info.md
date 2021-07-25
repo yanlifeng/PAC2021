@@ -5,6 +5,7 @@
 - [x] Simple muti-threading
 - [ ] vectorize
 - [ ] check！
+- [ ] icpc ？？？
 
 
 
@@ -81,3 +82,103 @@ g++ -o main main.cpp  -m64  -I"${MKLROOT}/include" -I"${MKLROOT}/include/fftw"  
 先不测了，过不去check，麻了。
 
 只换成icpx然后-fp-model precise一下可以过check（cmake .. -DUSE_INTEL_FFTW=0），时间略快，几乎一样，没啥用。
+
+
+
+## 0724
+
+ali冲冲冲，老甘yyds
+
+## 0725
+
+上来换成了icpc，直接把check干成了负数？？
+
+很迷，不管了，就g++先优化代码吧。
+
+thread 64
+
+|                                         |        |       |       |
+| --------------------------------------- | ------ | ----- | ----- |
+| zz                                      | /      | /     |       |
+| g++ -O3                                 | 14.176 | 8.975 | 3.253 |
+| icpx -O3 -fp-model precise              | 13.907 | 7.934 | 3.943 |
+| icpc -O3 -fp-model precise XXXXX        | 12.249 | 8.831 | 1.405 |
+| g++ -O3 -funroll-loops -flto            | 13.704 | 8.706 | 3.070 |
+| g++ -O3 -funroll-loops -flto thread 128 | 12.535 | 6.903 | 3.539 |
+| g++ -O3 -funroll-loops -flto thread 96  | 12.364 | 6.995 | 3.367 |
+
+icpc在recon部分能快一倍多，但是错的很离谱？先不管。
+
+-ffast-math等影响精度的操作都会导致过不了check，编译器和编译参数的调试就先到这里，暂时用g++ -O3 -funroll-loops -flto。
+
+然后改一下fftw，mkl的fftw会导致，略微微的过不了check，
+
+```bash
+mrc1mean: 984.078
+mrc1min: -70729.7
+mrc1max: 63454.7
+mrc2mean: 1001.4
+mrc2max: 63454.7
+The error accumulation of the two volume is: 287399
+The summation error of the two volume is: 0
+The mean error of the two volume is: 17.3234
+The absolute mean error on a single voxel is: 0.00438965
+The relative mean error on a single voxel is: 4.46067e-06
+Validation Failed!
+```
+
+现在官方fftw的参数是
+
+```
+--disable-doc --enable-threads --enable-float
+```
+
+改成512试试
+
+```
+--disable-doc --enable-threads --enable-float --enable-avx512
+```
+
+淦，gcc4.5不支持avx512，用256试试
+
+```
+--disable-doc --enable-threads --enable-float --enable-avx
+```
+
+淦，，会快一点，但是过不了check，这比赛咋打嘛。关于check稍微看了看脚本，关键就是比较了6e7个浮点数，然后把差值的绝对值加起来/6e7，这个值就是绝对误差，绝对误差/(6e7个数的平均值)就是相对误差，平均值大约是1000，然后6e7个数大约是1e3的数量级，最终要求相对误差<1e-7，即绝对误差<1e-4，即所有数的误差总和<6000，但肯定不能这么算
+
+```bash
+MRC1 Path:pro_novpp_Cor2_WBP_bin6.rec
+MRC2 Path:Result_NewMRCCTF_NewWBP/pro_novpp_Cor2_WBP_bin6.rec
+mrc1mean: 984.078
+mrc1min: -70729.7
+mrc1max: 63454.7
+mrc2mean: 1001.4
+mrc2max: 63454.7
+The error accumulation of the two volume is: 51421.9
+The summation error of the two volume is: 4096
+The mean error of the two volume is: 17.3234
+The absolute mean error on a single voxel is: 0.000785403
+The relative mean error on a single voxel is: 7.9811e-07
+```
+
+好嘛fftw也不能改。
+
+nzz的更新有bug，修改了。
+
+会不会给的参考答案就有点问题，试试用初始代码的输出作为答案，区别只有平均值，其他全都一样，所以并不会影响答案。
+
+=====================================
+
+避免出现去年pac决赛卡在精度的问题，先暂时不管，继续看代码。
+
+第一个热点简单看了一下，写了一个简单的优化版本：首先第一轮的fftw可以提出来只做一次，因为每次的计算过程都一样；此外，之前线程不安全的fftw的malloc和free也可以通过开副本的方式解决，略有提升：
+
+|                       |        |       |       |
+| --------------------- | ------ | ----- | ----- |
+| 简单优化3DF thread64  | 11.521 | 7.598 | 2.862 |
+| 简单优化3DF thread96  | 10.626 | 6.272 | 3.337 |
+| 简单优化3DF thread128 | 10.594 | 6.399 | 3.481 |
+|                       |        |       |       |
+
+提升不大，毕竟只在外层做了循环，它只循环60次左右，先push一下，下一个版本写第一个热点内部并行的。

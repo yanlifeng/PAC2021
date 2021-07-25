@@ -32,6 +32,7 @@ int main(int argc, char **argv) {
     float *mrc2_data = new float[mrc2.getNx() * mrc2.getNy()];
 
     float mrc12error = 0;
+    double mrc12errord = 0;
     float mrc1sum = 0;
     float mrc2sum = 0;
 
@@ -41,16 +42,27 @@ int main(int argc, char **argv) {
     cout << "mrc1min: " << mrc1.getMin() << endl;
     cout << "mrc1max: " << mrc1.getMax() << endl;
     cout << "mrc2mean: " << mrc2mean << endl;
+    cout << "mrc2min: " << mrc2.getMin() << endl;
     cout << "mrc2max: " << mrc2.getMax() << endl;
+
+    int64_t cnt = 0;
 
     for (int i = 0; i < mrc1.getNz(); i++) {
         mrc1.read2DIm_32bit(mrc1_data, i);
         mrc2.read2DIm_32bit(mrc2_data, i);
 
         for (int j = 0; j < mrc1.getNx() * mrc1.getNy(); j++) {
+//            if (cnt % 100000 == 0) {
+//                cout << mrc1_data[j] << " " << mrc2_data[j] << endl;
+//            }
+            cnt++;
             mrc1sum += mrc1_data[j];
             mrc2sum += mrc2_data[j];
+//            if (fabs(mrc1_data[j] - mrc2_data[j]) > 0) {
+//                cout << mrc1_data[j] << " " << mrc2_data[j] << endl;
+//            }
             mrc12error += fabs(mrc1_data[j] - mrc2_data[j]);
+            mrc12errord += fabs(mrc1_data[j] - mrc2_data[j]);
         }
 
     }
@@ -58,11 +70,20 @@ int main(int argc, char **argv) {
     float absMeanError = mrc12error / (mrc1.getNx() * mrc1.getNy() * mrc1.getNz());
     float rltMeanError = mrc12error / (mrc1.getNx() * mrc1.getNy() * mrc1.getNz()) / mrc1.getMean();
 
+    double absMeanErrord = mrc12errord / (mrc1.getNx() * mrc1.getNy() * mrc1.getNz());
+    double rltMeanErrord = mrc12errord / (mrc1.getNx() * mrc1.getNy() * mrc1.getNz()) / mrc1.getMean();
+
+
+    cout << "range " << mrc1.getNx() * mrc1.getNy() * mrc1.getNz() << endl;
+
     cout << "The error accumulation of the two volume is: " << mrc12error << endl;
+    cout << "The error accumulation of the two volume is(double): " << mrc12errord << endl;
     cout << "The summation error of the two volume is: " << fabs(mrc1sum - mrc2sum) << endl;
     cout << "The mean error of the two volume is: " << fabs(mrc1mean - mrc2mean) << endl;
     cout << "The absolute mean error on a single voxel is: " << absMeanError << endl;
     cout << "The relative mean error on a single voxel is: " << rltMeanError << endl;
+    cout << "The absolute mean error on a single voxel is(double): " << absMeanErrord << endl;
+    cout << "The relative mean error on a single voxel is(double): " << rltMeanErrord << endl;
 
     if (rltMeanError < 1e-7) {
         cout << "Validation Passed!" << endl;
