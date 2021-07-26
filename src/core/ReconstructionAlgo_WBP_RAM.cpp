@@ -243,22 +243,48 @@ static void filter_weighting_2D(float *image, int Nx, int Ny, float radial, floa
     delete[] bufc;
 }
 
-static void
-ctf_correction(float *image, int Nx, int Ny, CTF ctf, bool flip_contrast, float z_offset)   // z_offset in pixels
+static void ctf_correction(float *image,int Nx,int Ny,CTF ctf,bool flip_contrast,float z_offset)   // z_offset in pixels
 {
-    fftwf_plan plan_fft, plan_ifft;
-    float *bufc = new float[(Nx + 2 - Nx % 2) * Ny];
+    fftwf_plan plan_fft,plan_ifft;
+    float *bufc=new float[(Nx+2-Nx%2)*Ny];
+    plan_fft=fftwf_plan_dft_r2c_2d(Ny,Nx,(float*)bufc,reinterpret_cast<fftwf_complex*>(bufc),FFTW_ESTIMATE);
+    plan_ifft=fftwf_plan_dft_c2r_2d(Ny,Nx,reinterpret_cast<fftwf_complex*>(bufc),(float*)bufc,FFTW_ESTIMATE);
+    buf2fft(image,bufc,Nx,Ny);
+    fftwf_execute(plan_fft);
+
+    // loop: Ny (all Fourier components for y-axis)
+    for(int j=0;j<Ny;j++)
+    {
+        // loop: Nx+2-Nx%2 (all Fourier components for x-axis)
+        for(int i=0;i<(Nx+2-Nx%2);i+=2)
+        {
+            float ctf_now=ctf.computeCTF2D(i/2,j,Nx,Ny,true,flip_contrast,z_offset);
+            bufc[i+j*(Nx+2-Nx%2)]*=ctf_now;
+            bufc[(i+1)+j*(Nx+2-Nx%2)]*=ctf_now;
+        }
+    }
+
+    fftwf_execute(plan_ifft);
+    fft2buf(image,bufc,Nx,Ny);
+    for(int i=0;i<Nx*Ny;i++)   // normalization
+    {
+        image[i]=image[i]/(Nx*Ny);
+    }
+    fftwf_destroy_plan(plan_fft);
+    fftwf_destroy_plan(plan_ifft);
+    delete [] bufc;
+}
+
+
+static void
+ctf_correction_perbufc(float *image, int Nx, int Ny, CTF ctf, bool flip_contrast, float z_offset,float *bufc)   // z_offset in pixels
+{
+    fftwf_plan plan_ifft;
 #pragma omp critical
     {
-
-        plan_fft = fftwf_plan_dft_r2c_2d(Ny, Nx, (float *) bufc, reinterpret_cast<fftwf_complex *>(bufc),
-                                         FFTW_ESTIMATE);
         plan_ifft = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(bufc), (float *) bufc,
                                           FFTW_ESTIMATE);
-
     }
-    buf2fft(image, bufc, Nx, Ny);
-    fftwf_execute(plan_fft);
     // loop: Ny (all Fourier components for y-axis)
 //#pragma omp parallel for
     for (int j = 0; j < Ny; j++) {
@@ -279,10 +305,9 @@ ctf_correction(float *image, int Nx, int Ny, CTF ctf, bool flip_contrast, float 
     }
 #pragma omp critical
     {
-        fftwf_destroy_plan(plan_fft);
         fftwf_destroy_plan(plan_ifft);
     }
-    delete[] bufc;
+    //delete[] bufc;
 }
 
 
@@ -571,6 +596,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         cout << "Start reconstruction:" << endl;
         float x_orig_offset = float(stack_orig.getNx()) / 2.0, z_orig_offset = float(h) / 2.0;
         // loop: Nz (number of images)
+        TDEF(n_stack_orig_getNz)
+        TSTART(n_stack_orig_getNz)
         for (int n = 0; n < stack_orig.getNz(); n++)   // loop for every micrograph
         {
             TDEF(Image)
@@ -737,27 +764,32 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                      */
                     int zz_l = -int(h_tilt_max / 2);
                     int zz_r = int(h_tilt_max / 2);
-                    printf("\t\t %d -- %d\n",zz_l,zz_r);
+
+
+                    fftwf_plan plan_fft;
+                    float *bufc = new float[(stack_orig.getNx() + 2 - stack_orig.getNx() % 2) * stack_orig.getNy()];
+                    plan_fft = fftwf_plan_dft_r2c_2d(stack_orig.getNy(), stack_orig.getNx(), (float *) bufc, reinterpret_cast<fftwf_complex *>(bufc),FFTW_ESTIMATE);
+                    buf2fft(image_now, bufc, stack_orig.getNx(), stack_orig.getNy());
+                    fftwf_execute(plan_fft);
 #pragma omp parallel for
                     for (int zz = zz_l;
                          zz < zz_r; zz += defocus_step)    // loop over every height (correct with different defocus)
                     {
-                        float *image_now_temp = new float[stack_orig.getNx() * stack_orig.getNy()];
-                        memcpy(image_now_temp, image_now,
-                               sizeof(float) * stack_orig.getNx() * stack_orig.getNy()); // get the raw image!!!
-
-                        // correction
-                        int n_z = (zz + int(h_tilt_max / 2)) / defocus_step;
-
-                        ctf_correction(image_now_temp, stack_orig.getNx(), stack_orig.getNy(), ctf_para[n],
-                                       flip_contrast, float(zz) + float(defocus_step - 1) / 2);
-                        // save
+                        float *bufc_now = new float[(stack_orig.getNx() + 2 - stack_orig.getNx() % 2) * stack_orig.getNy()];
+                        memcpy(bufc_now,bufc,(stack_orig.getNx() + 2 - stack_orig.getNx() % 2) * stack_orig.getNy()*sizeof(float));
+                        int n_z = (zz + zz_r) / defocus_step;
                         stack_corrected[n_z] = new float[stack_orig.getNx() * stack_orig.getNy()];
-                        memcpy(stack_corrected[n_z], image_now_temp,
-                               sizeof(float) * stack_orig.getNx() * stack_orig.getNy());
-                        n_zz++;
+                        ctf_correction_perbufc(stack_corrected[n_z], stack_orig.getNx(), stack_orig.getNy(), ctf_para[n],
+                                       flip_contrast, float(zz) + float(defocus_step - 1) / 2,bufc_now);
                     }
+                    n_zz += ((zz_r-zz_l-1)/defocus_step+1);
+//                    if (n_zz!=((zz_r-zz_l)/defocus_step+1)){
+//                        printf("\t\t It is Wrong!!!\n");
+//                        printf("\t\t n_zz is %d ((zz_r-zz_l)/defocus_step)+1 is %d\n",n_zz,(zz_r-zz_l)/defocus_step+1);
+//                    }
                     //delete [] image_now_temp;
+                    delete [] bufc;
+                    fftwf_destroy_plan(plan_fft);
                     TEND(ctf_correction)
                     TPRINT(ctf_correction, "ctf_correction time is")
                     cout << "\tDone!" << endl;
@@ -831,7 +863,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
             TEND(Image)
             TPRINT(Image, "Image one time is ")
         }
-
+        TEND(n_stack_orig_getNz)
+        TPRINT(n_stack_orig_getNz,"n_stack_orig_getNz is ");
         // write out final result
         cout << "Wrtie out final reconstruction result:" << endl;
         MRC stack_final(output_mrc.c_str(), "wb");
