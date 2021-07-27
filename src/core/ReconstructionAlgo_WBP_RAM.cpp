@@ -1,17 +1,17 @@
 /*******************************************************************
- *       Filename:  ReconstructionAlgo.cpp                                     
- *                                                                 
- *    Description:                                        
- *                                                                 
- *        Version:  1.0                                            
- *        Created:  07/07/2020 05:40:48 PM                                 
- *       Revision:  none                                           
- *       Compiler:  gcc                                           
- *                                                                 
- *         Author:  Ruan Huabin                                      
- *          Email:  ruanhuabin@tsinghua.edu.cn                                        
- *        Company:  Dep. of CS, Tsinghua Unversity                                      
- *                                                                 
+ *       Filename:  ReconstructionAlgo.cpp
+ *
+ *    Description:
+ *
+ *        Version:  1.0
+ *        Created:  07/07/2020 05:40:48 PM
+ *       Revision:  none
+ *       Compiler:  gcc
+ *
+ *         Author:  Ruan Huabin
+ *          Email:  ruanhuabin@tsinghua.edu.cn
+ *        Company:  Dep. of CS, Tsinghua Unversity
+ *
  *******************************************************************/
 #include "ReconstructionAlgo_WBP_RAM.h"
 #include "mrc.h"
@@ -21,10 +21,11 @@
 #include "omp.h"
 #include "util.h"
 #include <sys/time.h>
+#include <cassert>
 
 #include "omp.h"
 
-const int threadNumber = 128;
+const int threadNumber = 64;
 
 
 double GetTime() {
@@ -564,6 +565,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         float x_orig_offset = float(stack_orig.getNx()) / 2.0, z_orig_offset = float(h) / 2.0;
         // loop: Nz (number of images)
 
+        double cost = 0;
         double cost0 = 0;
         double cost1 = 0;
         double cost2 = 0;
@@ -577,12 +579,18 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         for (int n = 0; n < stack_orig.getNz(); n++)   // loop for every micrograph
         {
             t1 = GetTime();
+            t2 = GetTime();
             cout << "Image " << n << ":" << endl;
             float theta_rad = theta[n] / 180 * M_PI;
+            double theta_rad_cos = cos(theta_rad);
+            double theta_rad_sin = sin(theta_rad);
             float *image_now = new float[stack_orig.getNx() * stack_orig.getNy()];
             stack_orig.read2DIm_32bit(image_now, n);
             float *image_now_backup = new float[stack_orig.getNx() * stack_orig.getNy()];
             memcpy(image_now_backup, image_now, sizeof(float) * stack_orig.getNx() * stack_orig.getNy());
+
+            t3 = GetTime();
+            cost += t3 - t2;
 
             if (skip_ctfcorrection)  // no correction, simple (W)BP
             {
@@ -718,6 +726,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     float *stack_corrected[int(h_tilt_max / defocus_step) + 1]; // 第一维遍历不同高度，第二维x，第三维y
                     int n_zz = 0;
 
+                    t2 = GetTime();
                     // weighting
                     if (!skip_weighting) {
                         cout << "\tStart weighting..." << endl;
@@ -725,6 +734,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                                  weighting_sigma);
                         cout << "\tDone" << endl;
                     }
+                    t3 = GetTime();
+                    cost0 += t3 - t2;
 
                     // 3D-CTF correction
                     //hotspot 1
@@ -757,33 +768,103 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                         plan_ifft[i] = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(bufc_thread[i]),
                                                              (float *) bufc_thread[i], FFTW_ESTIMATE);
                     }
+                    int zl = -int(h_tilt_max / 2);
+                    int zr = int(h_tilt_max / 2);
                     //loop: number of blocks (for 3D-CTF correction)
+
+                    /*
+
+init cost 0.00113
+for cost 0.03127
+fftw cost 0.00842
+fft2buf cost 0.00098
+last cost 0.00014
+                     */
+
 #pragma omp parallel for num_threads(threadNumber)
-                    for (int zz = -int(h_tilt_max / 2); zz < int(h_tilt_max / 2); zz += defocus_step)
+                    for (int zz = zl; zz < zr; zz += defocus_step)
                         // loop over every height (correct with different defocus)
                     {
                         int thread_id = omp_get_thread_num();
 
+//                        double tt0 = GetTime();
                         int n_z = (zz + int(h_tilt_max / 2)) / defocus_step;
                         stack_corrected[n_z] = new float[Nx * Ny];
                         float *image = stack_corrected[n_z];
                         CTF ctf = ctf_para[n];
                         float z_offset = float(zz) + float(defocus_step - 1) / 2;
                         memcpy(bufc_thread[thread_id], bufc_pre, sizeof(float) * ((Nx + 2 - Nx % 2) * Ny));
-
+//                        printf("init cost %.5f\n", GetTime() - tt0);
+//                        tt0 = GetTime();
                         // loop: Ny (all Fourier components for y-axis)
                         for (int j = 0; j < Ny; j++) {
                             // loop: Nx+2-Nx%2 (all Fourier components for x-axis)
                             for (int i = 0; i < (Nx + 2 - Nx % 2); i += 2) {
-                                float ctf_now = ctf.computeCTF2D(i / 2, j, Nx, Ny, true, flip_contrast, z_offset);
+//                                float ctf_now = ctf.computeCTF2D(i / 2, j, Nx, Ny, true, flip_contrast, z_offset);
+                                float ctf_now = 0;
+                                {
+                                    float x = i / 2, y = j;
+                                    float defocus1 = ctf.defocus1;
+                                    float defocus2 = ctf.defocus2;
+                                    float astig = ctf.astig;
+                                    float lambda = ctf.lambda;
+                                    float phase_shift = ctf.phase_shift;
+                                    float w_sin = ctf.w_sin;
+                                    float w_cos = ctf.w_cos;
+                                    float pix = ctf.pix;
+                                    float Cs = ctf.Cs;
+
+                                    float x_norm = (x >= int(ceil(float(Nx + 1) / 2))) ? (x - Nx) : (x);
+                                    float y_norm = (y >= int(ceil(float(Ny + 1) / 2))) ? (y - Ny) : (y);
+
+                                    float x_real = float(x_norm) / float(Nx) * (1 / pix);
+                                    float y_real = float(y_norm) / float(Ny) * (1 / pix);
+                                    float alpha;
+                                    if (x_norm == 0) {
+                                        if (y_norm > 0) {
+                                            alpha = M_PI_2;
+                                        } else if (y_norm < 0) {
+                                            alpha = -M_PI_2;
+                                        } else {
+                                            alpha = 0.0;
+                                        }
+                                    } else {
+                                        alpha = atan(y_real / x_real);
+                                    }
+                                    float freq2 = x_real * x_real + y_real * y_real;
+                                    float df_now =
+                                            ((defocus1 + defocus2 - 2 * z_offset * pix) +
+                                             (defocus1 - defocus2) * cos(2 * (alpha - astig))) / 2.0;
+                                    float chi = M_PI * lambda * df_now * freq2 -
+                                                M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
+                                    float ctf_now_tmp = w_sin * sin(chi) + w_cos * cos(chi);
+                                    if (flip_contrast) {
+                                        ctf_now_tmp = -ctf_now_tmp;
+                                    }
+
+                                    if (ctf_now_tmp >= 0) {
+                                        ctf_now = 1.0;
+                                    } else {
+                                        ctf_now = -1.0;
+                                    }
+                                }
+
                                 bufc_thread[thread_id][i + j * (Nx + 2 - Nx % 2)] *= ctf_now;
                                 bufc_thread[thread_id][(i + 1) + j * (Nx + 2 - Nx % 2)] *= ctf_now;
                             }
                         }
+//                        printf("for cost %.5f\n", GetTime() - tt0);
+//                        tt0 = GetTime();
                         fftwf_execute(plan_ifft[thread_id]);
+//                        printf("fftw cost %.5f\n", GetTime() - tt0);
+//                        tt0 = GetTime();
                         fft2buf(image, bufc_thread[thread_id], Nx, Ny);
+//                        printf("fft2buf cost %.5f\n", GetTime() - tt0);
+//                        tt0 = GetTime();
                         for (int i = 0; i < Nx * Ny; i++)image[i] = image[i] / (Nx * Ny);
                         n_zz_thread[thread_id]++;
+//                        printf("last cost %.5f\n", GetTime() - tt0);
+
 
                     }
                     for (int i = 0; i < threadNumber; i++) {
@@ -806,63 +887,102 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     cout << "\tPerform reconstruction:" << endl;
                     t2 = GetTime();
 
-
                     // loop: Ny (number of xz-slices)
-#ifdef _OPENMP
 #pragma omp parallel for num_threads(threadNumber)
-#endif
                     for (int j = 0; j < Ny; j++) {
-                        float *recon_now = new float[Nx * h];   // 第一维x，第二维z
 
-                        // BP
-                        // loop: Nx*h (whole xz-slice)
-                        for (int i = 0; i < Nx * h; i++) {
-                            recon_now[i] = 0.0;
-                        }
                         // loop: Nx*h (whole xz-slice)
                         for (int k = 0; k < h; k++) {
-                            for (int i = 0; i < Nx; i++)   // loop for the xz-plane to perform BP
+                            double l = 0;
+                            double r = Nx - 1;
+
+                            l = max(l, ((k - z_orig_offset) * theta_rad_sin - x_orig_offset)
+                                       / theta_rad_cos + x_orig_offset);
+                            r = min(r, ((k - z_orig_offset) * theta_rad_sin - x_orig_offset + Nx - 1)
+                                       / theta_rad_cos + x_orig_offset);
+                            if (theta_rad_cos < 0)swap(l, r);
+
+                            double ll = 0;
+                            double rr = Nx - 1;
+                            ll = max(ll, ((z_orig_offset - k) * theta_rad_cos - int(h_tilt_max / 2))
+                                         / theta_rad_sin + x_orig_offset);
+
+                            rr = min(rr, ((z_orig_offset - k) * theta_rad_cos - int(h_tilt_max / 2) +
+                                          n_zz * defocus_step) / theta_rad_sin + x_orig_offset);
+                            if (theta_rad_sin < 0)swap(ll, rr);
+                            l = max(l, ll);
+                            r = min(r, rr);
+
+                            int li = ceil(l);
+                            int ri = floor(r);
+//                            float x_orig = (li - x_orig_offset) * theta_rad_cos -
+//                                            (k - z_orig_offset) * theta_rad_sin + x_orig_offset;
+//                            float z_orig = (li - x_orig_offset) * theta_rad_sin +
+//                                            (k - z_orig_offset) * theta_rad_cos + z_orig_offset;
+
+                            for (int i = li; i <= ri; i++)   // loop for the xz-plane to perform BP
                             {
-                                float x_orig = (float(i) - x_orig_offset) * cos(theta_rad) -
-                                               (float(k) - z_orig_offset) * sin(theta_rad) + x_orig_offset;
-                                float z_orig = (float(i) - x_orig_offset) * sin(theta_rad) +
-                                               (float(k) - z_orig_offset) * cos(theta_rad) + z_orig_offset;
-                                float coeff = x_orig - floor(x_orig);
-                                int n_z = floor(((z_orig - z_orig_offset) + int(h_tilt_max / 2)) /
-                                                defocus_step);    // the num in the corrected stack for the current height
-                                if (n_z >= 0 && n_z < n_zz) {
-                                    if (floor(x_orig) >= 0 && ceil(x_orig) < Nx) {
-                                        recon_now[i + k * Nx] = (1 - coeff) * stack_corrected[n_z][
-                                                j * Nx + int(floor(x_orig))] + (coeff) *
-                                                                               stack_corrected[n_z][j *
-                                                                                                    Nx +
-                                                                                                    int(ceil(
-                                                                                                            x_orig))];
-                                    } else {
-                                        recon_now[i + k * Nx] = 0.0;
-                                    }
-                                } else {
-                                    recon_now[i + k * Nx] = 0.0;
-                                }
+
+                                float x_orig1 = (i - x_orig_offset) * theta_rad_cos -
+                                                (k - z_orig_offset) * theta_rad_sin + x_orig_offset;
+                                float z_orig1 = (i - x_orig_offset) * theta_rad_sin +
+                                                (k - z_orig_offset) * theta_rad_cos + z_orig_offset;
+//                                if (fabs(x_orig1 - x_orig) > 1e-7) {
+//                                    printf("gg1\n");
+//                                    printf("%lf %lf\n", x_orig, x_orig1);
+//                                }
+//                                if (fabs(z_orig1 - z_orig) > 1e-7) {
+//                                    printf("gg2\n");
+//                                    printf("%lf %lf\n", z_orig, z_orig1);
+//                                }
+
+                                int x1 = floor(x_orig1);
+                                int x2 = ceil(x_orig1);
+
+//                                if (x1 != floor(x_orig1)) {
+//                                    printf("gg3\n");
+//                                    printf("%d %d\n", x1, int(floor(x_orig1)));
+//                                    cout << x_orig << " " << x_orig1 << endl;
+////                                    printf("%.9f %9f\n", x_orig, x_orig1);
+//                                }
+//                                if (x2 != ceil(x_orig1)) {
+//                                    printf("gg4\n");
+//                                    printf("%d %d\n", x2, int(ceil(x_orig1)));
+////                                    printf("%.9f %9f\n", x_orig, x_orig1);
+//                                    cout << x_orig << " " << x_orig1 << endl;
+//                                }
+
+                                float coeff = x_orig1 - x1;
+                                int n_z = floor(((z_orig1 - z_orig_offset) + int(h_tilt_max / 2)) / defocus_step);
+//                                int n_z1 = floor(((z_orig1 - z_orig_offset) + int(h_tilt_max / 2)) / defocus_step);
+//
+//                                if (n_z != n_z1) {
+//                                    printf("gg5\n");
+//                                    printf("%d %d\n", n_z, n_z1);
+//
+//                                }
+
+                                // the num in the corrected stack for the current height
+
+                                stack_recon[j][i + k * Nx] +=
+                                        (1 - coeff) * stack_corrected[n_z][j * Nx + x1] +
+                                        (coeff) * stack_corrected[n_z][j * Nx + x2];
+//                                x_orig += theta_rad_cos;
+//                                z_orig += theta_rad_sin;
                             }
                         }
-                        // loop: Nx*h (whole xz-slice)
-                        for (int i = 0; i < Nx * h; i++) {
-                            stack_recon[j][i] += recon_now[i];
-                        }
-                        delete[] recon_now;
-
                     }
-
-
                     t3 = GetTime();
                     printf("reconstruction cost %.3f\n", t3 - t2);
                     cost2 += t3 - t2;
                     cout << "\tDone" << endl;
 
+                    t2 = GetTime();
                     for (int n_z = 0; n_z < n_zz; n_z++) {
                         delete[] stack_corrected[n_z];
                     }
+                    t3 = GetTime();
+                    cost3 += t3 - t2;
                 }
             }
             delete[] image_now;
@@ -871,8 +991,11 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         }
 
         printf("main for cost %.3f\n", GetTime() - t0);
-        printf("tot 3DF cost %.3f\n", cost1);
-        printf("tot reconstruction cost %.3f\n", cost2);
+        printf("init and read cost %.3f\n", cost);
+        printf("weight cost %.3f\n", cost0);
+        printf("3DF cost %.3f\n", cost1);
+        printf("reconstruction cost %.3f\n", cost2);
+        printf("free cost %.3f\n", cost3);
 
         // write out final result
         cout << "Wrtie out final reconstruction result:" << endl;
