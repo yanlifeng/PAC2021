@@ -62,9 +62,11 @@ static void buf2fft_padding_1D(float *buf, float *fft, int nx_orig, int nx_final
     int nxb = nx_final + 2 - nx_final % 2;
     int nxp = nx_final - nx_orig + 1;
     int i, j;
+#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < (nx_final + 2 - nx_final % 2) * ny_final; i++) {
         fft[i] = 0.0;
     }
+#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < ny_orig; i++) {
         memcpy(fft + i * nxb, buf + i * nx_orig, sizeof(float) * nx_orig);
         for (j = nx_orig; j < nx_final; j++)    // padding for continuity (FFT本质是周期延拓后做DFT，将首尾连接以保证连续性)
@@ -78,9 +80,11 @@ static void buf2fft_padding_1D(float *buf, float *fft, int nx_orig, int nx_final
 static void fft2buf_padding_1D(float *buf, float *fft, int nx_orig, int nx_final, int ny_orig, int ny_final) {
     int nxb = nx_final + 2 - nx_final % 2;
     int i;
+#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < nx_orig * ny_orig; i++) {
         buf[i] = 0.0;
     }
+#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < ny_orig; i++) {
         memcpy(buf + i * nx_orig, fft + i * nxb, sizeof(float) * nx_orig);
     }
@@ -135,6 +139,7 @@ static void filter_weighting_1D_many(float *data, int Nx, int Ny, float radial, 
     int Nx_final = Nx + Nx_padding;
     fftwf_plan plan_fft, plan_ifft;
     float *bufc = new float[(Nx_final + 2 - Nx_final % 2) * Ny];
+
     plan_fft = fftwf_plan_many_dft_r2c(1, &Nx_final, Ny, (float *) bufc, NULL, 1, (Nx_final + 2 - Nx_final % 2),
                                        reinterpret_cast<fftwf_complex *>(bufc), NULL, 1,
                                        (Nx_final + 2 - Nx_final % 2) / 2, FFTW_ESTIMATE);
@@ -143,11 +148,13 @@ static void filter_weighting_1D_many(float *data, int Nx, int Ny, float radial, 
                                         (Nx_final + 2 - Nx_final % 2), FFTW_ESTIMATE);
 
     buf2fft_padding_1D(data, bufc, Nx, Nx_final, Ny, Ny);
+
     fftwf_execute(plan_fft);
 
     int radial_Nx = int(floor((Nx_final) * radial));
     float sigma_Nx = float(Nx_final) * sigma;
     // loop: Ny (all Fourier components for y-axis)
+#pragma omp parallel for num_threads(threadNumber)
     for (int j = 0; j < Ny; j++) {
         // loop: Nx_final+2-Nx_final%2 (all Fourier components for x-axis)
         for (int i = 0; i < Nx_final + 2 - Nx_final % 2; i += 2) {
@@ -173,6 +180,7 @@ static void filter_weighting_1D_many(float *data, int Nx, int Ny, float radial, 
 
     fftwf_execute(plan_ifft);
     fft2buf_padding_1D(data, bufc, Nx, Nx_final, Ny, Ny);
+#pragma omp parallel for num_threads(threadNumber)
     for (int i = 0; i < Nx * Ny; i++)   // normalization
     {
         data[i] /= Nx;
@@ -578,6 +586,9 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
         cout << "range " << stack_orig.getNx() << " " << stack_orig.getNy() << " " << stack_orig.getNz() << endl;
 
+        fftwf_init_threads();
+
+
         for (int n = 0; n < stack_orig.getNz(); n++)   // loop for every micrograph
         {
             t1 = GetTime();
@@ -727,11 +738,15 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     cout << "\tPerform 3D correction & save corrected stack:" << endl;
                     float *stack_corrected[int(h_tilt_max / defocus_step) + 1]; // 第一维遍历不同高度，第二维x，第三维y
                     int n_zz = 0;
+                    fftwf_plan_with_nthreads(4);
+
 
                     t2 = GetTime();
                     // weighting
                     if (!skip_weighting) {
                         cout << "\tStart weighting..." << endl;
+//                        printf("now fftw use %d\n", fftw_planner_nthreads());
+
                         filter_weighting_1D_many(image_now, stack_orig.getNx(), stack_orig.getNy(), weighting_radial,
                                                  weighting_sigma);
                         cout << "\tDone" << endl;
@@ -759,19 +774,17 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     buf2fft(image_pre, bufc_pre, Nx, Ny);
                     fftwf_execute(plan_fft_pre);
                     fftwf_destroy_plan(plan_fft_pre);
+                    fftwf_plan_with_nthreads(1);
 
 
                     int n_zz_thread[threadNumber];
-                    float *bufc_thread[threadNumber];
-                    fftwf_plan plan_ifft[threadNumber];
                     for (int i = 0; i < threadNumber; i++) {
                         n_zz_thread[i] = 0;
-                        bufc_thread[i] = new float[(Nx + 2 - Nx % 2) * Ny];
-                        plan_ifft[i] = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(bufc_thread[i]),
-                                                             (float *) bufc_thread[i], FFTW_ESTIMATE);
                     }
                     int zl = -int(h_tilt_max / 2);
                     int zr = int(h_tilt_max / 2);
+                    int Nx2 = Nx + 2 - Nx % 2;
+
                     //loop: number of blocks (for 3D-CTF correction)
 
                     /*
@@ -784,25 +797,17 @@ last cost 0.00014
                      */
 
 #pragma omp parallel for num_threads(threadNumber)
-                    for (int zz = zl; zz < zr; zz += defocus_step)
-                        // loop over every height (correct with different defocus)
-                    {
+                    for (int zz = zl; zz < zr; zz += defocus_step) {
                         int thread_id = omp_get_thread_num();
 
-//                        double tt0 = GetTime();
                         int n_z = (zz + int(h_tilt_max / 2)) / defocus_step;
-                        stack_corrected[n_z] = new float[Nx * Ny];
+                        stack_corrected[n_z] = new float[Nx2 * Ny];
                         float *image = stack_corrected[n_z];
                         CTF ctf = ctf_para[n];
                         float z_offset = float(zz) + float(defocus_step - 1) / 2;
-                        memcpy(bufc_thread[thread_id], bufc_pre, sizeof(float) * ((Nx + 2 - Nx % 2) * Ny));
-//                        printf("init cost %.5f\n", GetTime() - tt0);
-//                        tt0 = GetTime();
-                        // loop: Ny (all Fourier components for y-axis)
+                        memcpy(image, bufc_pre, sizeof(float) * (Nx2 * Ny));
                         for (int j = 0; j < Ny; j++) {
-                            // loop: Nx+2-Nx%2 (all Fourier components for x-axis)
-                            for (int i = 0; i < (Nx + 2 - Nx % 2); i += 2) {
-//                                float ctf_now = ctf.computeCTF2D(i / 2, j, Nx, Ny, true, flip_contrast, z_offset);
+                            for (int i = 0; i < Nx2; i += 2) {
                                 float ctf_now = 0;
                                 {
                                     float x = i / 2, y = j;
@@ -851,33 +856,32 @@ last cost 0.00014
                                     }
                                 }
 
-                                bufc_thread[thread_id][i + j * (Nx + 2 - Nx % 2)] *= ctf_now;
-                                bufc_thread[thread_id][(i + 1) + j * (Nx + 2 - Nx % 2)] *= ctf_now;
+                                image[i + j * Nx2] *= ctf_now;
+                                image[(i + 1) + j * Nx2] *= ctf_now;
                             }
                         }
-//                        printf("for cost %.5f\n", GetTime() - tt0);
-//                        tt0 = GetTime();
-                        fftwf_execute(plan_ifft[thread_id]);
-//                        printf("fftw cost %.5f\n", GetTime() - tt0);
-//                        tt0 = GetTime();
-//                        fft2buf(image, bufc_thread[thread_id], Nx, Ny);
+
+//                        printf("now fftw use %d\n", fftw_planner_nthreads());
+
+                        fftwf_plan plan_ifft;
+#pragma omp critical
                         {
-                            int nxb = Nx + 2 - Nx % 2;
-//                            memset(image, 0, sizeof(float) * Nx * Ny);
-                            for (int i = 0; i < Ny; i++) {
-                                memcpy(image + i * Nx, bufc_thread[thread_id] + i * nxb, sizeof(float) * Nx);
-                            }
+                            plan_ifft = fftwf_plan_dft_c2r_2d(Ny, Nx,
+                                                              reinterpret_cast<fftwf_complex *>(image),
+                                                              (float *) image, FFTW_ESTIMATE);
                         }
-//                        printf("fft2buf cost %.5f\n", GetTime() - tt0);
-//                        tt0 = GetTime();
-                        for (int i = 0; i < Nx * Ny; i++)image[i] = image[i] / (Nx * Ny);
+
+                        fftwf_execute(plan_ifft);
+#pragma omp critical
+                        {
+                            fftwf_destroy_plan(plan_ifft);
+                        }
+
+                        for (int i = 0; i < Nx2 * Ny; i++)image[i] = image[i] / (Nx * Ny);
                         n_zz_thread[thread_id]++;
-//                        printf("last cost %.5f\n", GetTime() - tt0);
                     }
                     for (int i = 0; i < threadNumber; i++) {
                         n_zz += n_zz_thread[i];
-                        delete[] bufc_thread[i];
-                        fftwf_destroy_plan(plan_ifft[i]);
                     }
                     delete[] bufc_pre;
 
@@ -936,8 +940,8 @@ last cost 0.00014
                                 int n_z = floor((z_orig + C) / defocus_step);
                                 // the num in the corrected stack for the current height
                                 stack_recon[j][i + k * Nx] +=
-                                        (1 - coeff) * stack_corrected[n_z][j * Nx + x1] +
-                                        (coeff) * stack_corrected[n_z][j * Nx + x2];
+                                        (1 - coeff) * stack_corrected[n_z][j * Nx2 + x1] +
+                                        (coeff) * stack_corrected[n_z][j * Nx2 + x2];
                             }
                         }
                     }
