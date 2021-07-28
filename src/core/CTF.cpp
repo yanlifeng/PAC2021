@@ -65,9 +65,14 @@ float CTF::getPhaseShift()
     return phase_shift;
 }
 
-float CTF::getW()
+float CTF::getWCos()
 {
     return w_cos;
+}
+
+float CTF::getWSin()
+{
+    return w_sin;
 }
 
 float CTF::getPixelSize()
@@ -97,6 +102,7 @@ int CTF::getN()
 
 float CTF::computeCTF2D(float x,float y,int Nx,int Ny,bool phaseflip,bool flip_contrast,float z_offset) // z_offset in pixels, x和y给的都是格点坐标值，非真实值
 {
+    // phaseflip = true
     float x_norm=(x>=int(ceil(float(Nx+1)/2)))?(x-Nx):(x),y_norm=(y>=int(ceil(float(Ny+1)/2)))?(y-Ny):(y);
     float x_real=float(x_norm)/float(Nx)*(1/pix),y_real=float(y_norm)/float(Ny)*(1/pix);
     float alpha;
@@ -129,14 +135,15 @@ float CTF::computeCTF2D(float x,float y,int Nx,int Ny,bool phaseflip,bool flip_c
     }
     if(phaseflip)
     {
-        if(ctf_now>=0)
-        {
-            return 1.0;
-        }
-        else
-        {
-            return -1.0;
-        }
+        return 1.0-(((*((unsigned int*)&ctf_now)) >> 31) << 1);
+//        if(ctf_now>=0)
+//        {
+//            return 1.0;
+//        }
+//        else
+//        {
+//            return -1.0;
+//        }
     }
     else
     {

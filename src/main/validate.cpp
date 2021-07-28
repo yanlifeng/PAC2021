@@ -60,7 +60,7 @@ int main(int argc, char** argv)
     }
 
     float absMeanError = mrc12error/(mrc1.getNx()*mrc1.getNy()*mrc1.getNz());
-    float rltMeanError = mrc12error/(mrc1.getNx()*mrc1.getNy()*mrc1.getNz())/mrc1.getMean();
+    float rltMeanError = mrc12error/(mrc1.getNx()*mrc1.getNy()*mrc1.getNz())/fabs(mrc1.getMean());
 
     cout << "The error accumulation of the two volume is: " << mrc12error << endl;
     cout << "The summation error of the two volume is: " << fabs(mrc1sum - mrc2sum) << endl;
@@ -68,7 +68,7 @@ int main(int argc, char** argv)
     cout << "The absolute mean error on a single voxel is: " << absMeanError <<endl;
     cout << "The relative mean error on a single voxel is: " << rltMeanError <<endl;
 
-    if(rltMeanError < 1e-7)
+    if(fabs(rltMeanError) < 1e-7)
     {
         cout<<"Validation Passed!"<<endl;
     }

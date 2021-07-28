@@ -14,7 +14,8 @@ public:
     float getDefocus2();
     float getAstigmatism();
     float getPhaseShift();
-    float getW();
+    float getWCos();
+    float getWSin();
     float getPixelSize();
     float getVoltage();
     float getCs();

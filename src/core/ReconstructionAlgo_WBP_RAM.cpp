@@ -22,7 +22,6 @@
 #include "util.h"
 #include <omp.h>
 #include <chrono>
-
 typedef std::chrono::high_resolution_clock Clock;
 #define TDEF(x_) chrono::high_resolution_clock::time_point x_##_t0, x_##_t1;
 #define TSTART(x_) x_##_t0 = Clock::now();
@@ -32,7 +31,7 @@ typedef std::chrono::high_resolution_clock Clock;
 static void buf2fft(float *buf, float *fft, int nx, int ny) {
     int nxb = nx + 2 - nx % 2;
     int i;
-    for (i = 0; i < (nx + 2 - nx % 2) * ny; i++) {
+    for (i = 0; i < nxb * ny; i++) {
         fft[i] = 0.0;
     }
     for (i = 0; i < ny; i++) {
@@ -141,6 +140,7 @@ static void filter_weighting_1D_many(float *data, int Nx, int Ny, float radial, 
     int radial_Nx = int(floor((Nx_final) * radial));
     float sigma_Nx = float(Nx_final) * sigma;
     // loop: Ny (all Fourier components for y-axis)
+#pragma omp parallel for
     for (int j = 0; j < Ny; j++) {
         // loop: Nx_final+2-Nx_final%2 (all Fourier components for x-axis)
         for (int i = 0; i < Nx_final + 2 - Nx_final % 2; i += 2) {
@@ -259,6 +259,7 @@ static void ctf_correction(float *image,int Nx,int Ny,CTF ctf,bool flip_contrast
         for(int i=0;i<(Nx+2-Nx%2);i+=2)
         {
             float ctf_now=ctf.computeCTF2D(i/2,j,Nx,Ny,true,flip_contrast,z_offset);
+
             bufc[i+j*(Nx+2-Nx%2)]*=ctf_now;
             bufc[(i+1)+j*(Nx+2-Nx%2)]*=ctf_now;
         }
@@ -286,19 +287,87 @@ ctf_correction_perbufc(float *image, int Nx, int Ny, CTF ctf, bool flip_contrast
                                           FFTW_ESTIMATE);
     }
     // loop: Ny (all Fourier components for y-axis)
+    float defocus1 = ctf.getDefocus1();
+    float defocus2 = ctf.getDefocus2();
+    float astig = ctf.getAstigmatism();
+    float lambda = ctf.getLambda();
+    float phase_shift = ctf.getPhaseShift();
+    float w_sin = ctf.getWSin();
+    float w_cos = ctf.getWCos();
+    float pix = ctf.getPixelSize();
+    float Cs = ctf.getCs();
+    float ctf_now = 0;
 //#pragma omp parallel for
+    int Nxc = Nx + 2 -(Nx&1);
     for (int j = 0; j < Ny; j++) {
         // loop: Nx+2-Nx%2 (all Fourier components for x-axis)
-        for (int i = 0; i < (Nx + 2 - Nx % 2); i += 2) {
-            float ctf_now = ctf.computeCTF2D(i / 2, j, Nx, Ny, true, flip_contrast, z_offset);
-            bufc[i + j * (Nx + 2 - Nx % 2)] *= ctf_now;
-            bufc[(i + 1) + j * (Nx + 2 - Nx % 2)] *= ctf_now;
+        float y=j;
+        float y_norm = (y >= int(ceil(float(Ny + 1) / 2))) ? (y - Ny) : (y);
+        float y_real = float(y_norm) / float(Ny) * (1 / pix);
+        float y_real_2 = y_real*y_real;
+        // 特殊处理 x_norm = 0
+        {
+            float x_norm = 0;
+            float x_real = 0;
+            float alpha;
+            if (y_norm > 0) {
+                alpha = M_PI_2;
+            } else if (y_norm < 0) {
+                alpha = -M_PI_2;
+            } else {
+                alpha = 0.0;
+            }
+            float freq2 = y_real_2;
+            float df_now =
+                    ((defocus1 + defocus2 - 2 * z_offset * pix) +
+                     (defocus1 - defocus2) * cos(2 * (alpha - astig))) / 2.0;
+            float chi = M_PI * lambda * df_now * freq2 -
+                        M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
+            ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
+//            if (flip_contrast) {
+//                ctf_now = -ctf_now;
+//            }
+            ctf_now = 1.0-(((*((unsigned int*)&ctf_now)) >> 31) << 1);
+//                if (ctf_now >= 0) {
+//                    ctf_now = 1.0;
+//                } else {
+//                    ctf_now = -1.0;
+//                }
+            bufc[j * Nxc] *= ctf_now;
+            bufc[1 + j * Nxc] *= ctf_now;
+        }
+        for (int i = 2; i < Nxc; i += 2) {
+            //float ctf_now = ctf.computeCTF2D(i / 2, j, Nx, Ny, true, flip_contrast, z_offset);
+            {
+                float x = i / 2;
+                float x_norm = (x >= int(ceil(float(Nx + 1) / 2))) ? (x - Nx) : (x);
+                float x_real = float(x_norm) / float(Nx) * (1 / pix);
+                float alpha = atan(y_real / x_real);
+                float freq2 = x_real * x_real + y_real_2;
+                float df_now =
+                        ((defocus1 + defocus2 - 2 * z_offset * pix) +
+                         (defocus1 - defocus2) * cos(2 * (alpha - astig))) / 2.0;
+                float chi = M_PI * lambda * df_now * freq2 -
+                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
+                ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
+//                if (flip_contrast) {
+//                    ctf_now = -ctf_now;
+//                }
+                ctf_now = 1.0-(((*((unsigned int*)&ctf_now)) >> 31) << 1);
+//                if (ctf_now >= 0) {
+//                    ctf_now = 1.0;
+//                } else {
+//                    ctf_now = -1.0;
+//                }
+            }
+            bufc[i + j * Nxc] *= ctf_now;
+            bufc[(i + 1) + j * Nxc] *= ctf_now;
         }
     }
 
     fftwf_execute(plan_ifft);
     fft2buf(image, bufc, Nx, Ny);
-//#pragma omp parallel for
+#pragma omp simd
     for (int i = 0; i < Nx * Ny; i++)   // normalization
     {
         image[i] = image[i] / (Nx * Ny);
@@ -579,15 +648,20 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
      */
     TDEF(Reconstruction_ALL)
     TSTART(Reconstruction_ALL)
+    int Nx = stack_orig.getNx();
+    int Ny = stack_orig.getNy();
+    int Nz = stack_orig.getNz();
+
+
     // Reconstruction
     cout << endl << "Reconstruction with (W)BP in RAM:" << endl << endl;
     if (!unrotated_stack)    // input rotated stack (y-axis as tilt axis)
     {
         cout << "Using rotated stack" << endl;
 
-        float *stack_recon[stack_orig.getNy()]; // (x,z,y)
-        for (int j = 0; j < stack_orig.getNy(); j++) {
-            stack_recon[j] = new float[stack_orig.getNx() * h];
+        float *stack_recon[Ny]; // (x,z,y)
+        for (int j = 0; j < Ny; j++) {
+            stack_recon[j] = new float[Nx * h];
             for (int i = 0; i < stack_orig.getNx() * h; i++) {
                 stack_recon[j][i] = 0.0;
             }
@@ -598,16 +672,18 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         // loop: Nz (number of images)
         TDEF(n_stack_orig_getNz)
         TSTART(n_stack_orig_getNz)
-        for (int n = 0; n < stack_orig.getNz(); n++)   // loop for every micrograph
+        for (int n = 0; n < Nz; n++)   // loop for every micrograph
         {
             TDEF(Image)
             TSTART(Image)
             cout << "Image " << n << ":" << endl;
             float theta_rad = theta[n] / 180 * M_PI;
-            float *image_now = new float[stack_orig.getNx() * stack_orig.getNy()];
+            double cos_theta_rad = cos(theta_rad);
+            double sin_theta_rad = sin(theta_rad);
+            float *image_now = new float[Nx * Ny];
             stack_orig.read2DIm_32bit(image_now, n);
-            float *image_now_backup = new float[stack_orig.getNx() * stack_orig.getNy()];
-            memcpy(image_now_backup, image_now, sizeof(float) * stack_orig.getNx() * stack_orig.getNy());
+            float *image_now_backup = new float[Nx * Ny];
+            memcpy(image_now_backup, image_now, sizeof(float) * Nx * Ny);
 
             if (skip_ctfcorrection)  // no correction, simple (W)BP
             {
@@ -615,7 +691,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                 // weighting
                 if (!skip_weighting) {
                     cout << "\tStart weighting: " << endl;
-                    filter_weighting_1D_many(image_now, stack_orig.getNx(), stack_orig.getNy(), weighting_radial,
+                    filter_weighting_1D_many(image_now, Nx, stack_orig.getNy(), weighting_radial,
                                              weighting_sigma);
                     cout << "\tDone!" << endl;
                 }
@@ -745,7 +821,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     // weighting
                     if (!skip_weighting) {
                         cout << "\tStart weighting..." << endl;
-                        filter_weighting_1D_many(image_now, stack_orig.getNx(), stack_orig.getNy(), weighting_radial,
+                        filter_weighting_1D_many(image_now, Nx, Ny, weighting_radial,
                                                  weighting_sigma);
                         cout << "\tDone" << endl;
                     }
@@ -764,22 +840,20 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                      */
                     int zz_l = -int(h_tilt_max / 2);
                     int zz_r = int(h_tilt_max / 2);
-
-
                     fftwf_plan plan_fft;
-                    float *bufc = new float[(stack_orig.getNx() + 2 - stack_orig.getNx() % 2) * stack_orig.getNy()];
-                    plan_fft = fftwf_plan_dft_r2c_2d(stack_orig.getNy(), stack_orig.getNx(), (float *) bufc, reinterpret_cast<fftwf_complex *>(bufc),FFTW_ESTIMATE);
-                    buf2fft(image_now, bufc, stack_orig.getNx(), stack_orig.getNy());
+                    float *bufc = new float[(Nx + 2 - Nx % 2) * Ny];
+                    plan_fft = fftwf_plan_dft_r2c_2d(Ny, Nx, (float *) bufc, reinterpret_cast<fftwf_complex *>(bufc),FFTW_ESTIMATE);
+                    buf2fft(image_now, bufc, Nx, stack_orig.getNy());
                     fftwf_execute(plan_fft);
 #pragma omp parallel for
                     for (int zz = zz_l;
                          zz < zz_r; zz += defocus_step)    // loop over every height (correct with different defocus)
                     {
-                        float *bufc_now = new float[(stack_orig.getNx() + 2 - stack_orig.getNx() % 2) * stack_orig.getNy()];
-                        memcpy(bufc_now,bufc,(stack_orig.getNx() + 2 - stack_orig.getNx() % 2) * stack_orig.getNy()*sizeof(float));
+                        float *bufc_now = new float[(Nx + 2 - Nx % 2) * Ny];
+                        memcpy(bufc_now,bufc,(Nx + 2 - Nx % 2) * Ny*sizeof(float));
                         int n_z = (zz + zz_r) / defocus_step;
-                        stack_corrected[n_z] = new float[stack_orig.getNx() * stack_orig.getNy()];
-                        ctf_correction_perbufc(stack_corrected[n_z], stack_orig.getNx(), stack_orig.getNy(), ctf_para[n],
+                        stack_corrected[n_z] = new float[Nx * Ny];
+                        ctf_correction_perbufc(stack_corrected[n_z], Nx, Ny, ctf_para[n],
                                        flip_contrast, float(zz) + float(defocus_step - 1) / 2,bufc_now);
                     }
                     n_zz += ((zz_r-zz_l-1)/defocus_step+1);
@@ -805,48 +879,42 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     TSTART(recon_now)
                     // loop: Ny (number of xz-slices)
 #pragma omp parallel for
-                    for (int j = 0; j < stack_orig.getNy(); j++) {
-                        float *recon_now;
-
-                        recon_now = new float[stack_orig.getNx() * h];   // 第一维x，第二维z
-                        // BP
-                        // loop: Nx*h (whole xz-slice)
-                        for (int i = 0; i < stack_orig.getNx() * h; i++) {
-                            recon_now[i] = 0.0;
-                        }
-                        // loop: Nx*h (whole xz-slice)
+                    for (int j = 0; j < Ny; j++) {
                         for (int k = 0; k < h; k++) {
-                            for (int i = 0; i < stack_orig.getNx(); i++)   // loop for the xz-plane to perform BP
+                            float x_orig_k=(float(k) - z_orig_offset) * sin(theta_rad) - x_orig_offset;
+                            float z_orig_k=(float(k) - z_orig_offset) * cos(theta_rad);
+                            int l=0,r=Nx-1;
+                            int l1,r1;
+                            if (cos_theta_rad > 0 ){
+                                l1 = ceil(x_orig_k / cos_theta_rad + x_orig_offset);
+                                r1 = floor(((Nx-1)+x_orig_k)/cos_theta_rad + x_orig_offset);
+                            }else{
+                                r1 = ceil(x_orig_k / cos_theta_rad + x_orig_offset);
+                                l1 = floor(((Nx-1)+x_orig_k)/cos_theta_rad + x_orig_offset);
+                            }
+                            l=max(l,l1); r=min(r,r1);
+                            if (sin_theta_rad > 0 ){
+                                l1 = ceil(-(z_orig_k+ int(h_tilt_max/2))/sin_theta_rad + x_orig_offset);
+                                r1 = floor(((n_zz * defocus_step) - z_orig_k -int(h_tilt_max/2)) / sin_theta_rad + x_orig_offset - 1);
+                            } else {
+                                r1 = ceil(-(z_orig_k+ int(h_tilt_max/2))/sin_theta_rad + x_orig_offset);
+                                l1 = floor(((n_zz * defocus_step) - z_orig_k -int(h_tilt_max/2)) / sin_theta_rad + x_orig_offset - 1);
+                            }
+                            l=max(l,l1); r=min(r,r1);
+                            for (int i = l; i <= r ; i++)   // loop for the xz-plane to perform BP
                             {
-                                float x_orig = (float(i) - x_orig_offset) * cos(theta_rad) -
-                                               (float(k) - z_orig_offset) * sin(theta_rad) + x_orig_offset;
-                                float z_orig = (float(i) - x_orig_offset) * sin(theta_rad) +
-                                               (float(k) - z_orig_offset) * cos(theta_rad) + z_orig_offset;
-                                float coeff = x_orig - floor(x_orig);
-                                int n_z = floor(((z_orig - z_orig_offset) + int(h_tilt_max / 2)) /
+                                float x_orig = (float(i) - x_orig_offset) * cos_theta_rad - (float(k) - z_orig_offset) * sin_theta_rad + x_orig_offset;
+                                float z_orig = (float(i) - x_orig_offset) * sin_theta_rad + (float(k) - z_orig_offset) * cos_theta_rad + z_orig_offset;
+                                int x_orig_l = floor(x_orig);
+                                int x_orig_r = ceil(x_orig);
+                                int n_z = (int)((z_orig - z_orig_offset + int(h_tilt_max / 2) ) /
                                                 defocus_step);    // the num in the corrected stack for the current height
-                                if (n_z >= 0 && n_z < n_zz) {
-                                    if (floor(x_orig) >= 0 && ceil(x_orig) < stack_orig.getNx()) {
-                                        recon_now[i + k * stack_orig.getNx()] = (1 - coeff) * stack_corrected[n_z][
-                                                j * stack_orig.getNx() + int(floor(x_orig))] + (coeff) *
-                                                                                               stack_corrected[n_z][j *
-                                                                                                                    stack_orig.getNx() +
-                                                                                                                    int(ceil(
-                                                                                                                            x_orig))];
-                                    } else {
-                                        recon_now[i + k * stack_orig.getNx()] = 0.0;
-                                    }
-                                } else {
-                                    recon_now[i + k * stack_orig.getNx()] = 0.0;
-                                }
+                                                // 上面这行代码一动就精度大问题 例如 int(h_tilt_max / 2) -> zz_r
+                                float coeff = x_orig - x_orig_l;
+                                stack_recon[j][i + k * Nx] += (1 - coeff) * stack_corrected[n_z][j * Nx + x_orig_l] + (coeff)*stack_corrected[n_z][j*Nx + x_orig_r];
                             }
                         }
-                        // loop: Nx*h (whole xz-slice)
-                        for (int i = 0; i < stack_orig.getNx() * h; i++) {
-                            stack_recon[j][i] += recon_now[i];
-                        }
-                        delete[] recon_now;
-                    }
+                   }
                     TEND(recon_now)
                     TPRINT(recon_now, "recon_now time is")
 
@@ -868,9 +936,9 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         // write out final result
         cout << "Wrtie out final reconstruction result:" << endl;
         MRC stack_final(output_mrc.c_str(), "wb");
-        stack_final.createMRC_empty(stack_orig.getNx(), h, stack_orig.getNy(), 2); // (x,z,y)
+        stack_final.createMRC_empty(stack_orig.getNx(), h, Ny, 2); // (x,z,y)
         // loop: Ny (number of xz-slices)
-        for (int j = 0; j < stack_orig.getNy(); j++) {
+        for (int j = 0; j < Ny; j++) {
             stack_final.write2DIm(stack_recon[j], j);
         }
         TEND(Reconstruction_ALL)
@@ -885,7 +953,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
             mean_thread[th] = 0.0;
         }
 
-        for (int j = 0; j < stack_orig.getNy(); j++) {
+        for (int j = 0; j < Ny; j++) {
             double mean_now = 0.0;
             for (int i = 0; i < stack_orig.getNx() * h; i++) {
                 mean_now += stack_recon[j][i];
@@ -910,10 +978,10 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                 max_all = max_thread[th];
             }
         }
-        mean_all /= stack_orig.getNy();
+        mean_all /= Ny;
         stack_final.computeHeader(pix, false, min_all, max_all, float(mean_all));
 
-        for (int j = 0; j < stack_orig.getNy(); j++) {
+        for (int j = 0; j < Ny; j++) {
             delete[] stack_recon[j];
         }
 
