@@ -25,7 +25,7 @@
 
 #include "omp.h"
 
-const int threadNumber = 64;
+const int threadNumber = 128;
 
 
 double GetTime() {
@@ -864,8 +864,6 @@ last cost 0.00014
                         for (int i = 0; i < Nx * Ny; i++)image[i] = image[i] / (Nx * Ny);
                         n_zz_thread[thread_id]++;
 //                        printf("last cost %.5f\n", GetTime() - tt0);
-
-
                     }
                     for (int i = 0; i < threadNumber; i++) {
                         n_zz += n_zz_thread[i];
@@ -915,60 +913,22 @@ last cost 0.00014
 
                             int li = ceil(l);
                             int ri = floor(r);
-//                            float x_orig = (li - x_orig_offset) * theta_rad_cos -
-//                                            (k - z_orig_offset) * theta_rad_sin + x_orig_offset;
-//                            float z_orig = (li - x_orig_offset) * theta_rad_sin +
-//                                            (k - z_orig_offset) * theta_rad_cos + z_orig_offset;
+                            double A = (k - z_orig_offset) * theta_rad_sin - x_orig_offset;
+                            double B = (k - z_orig_offset) * theta_rad_cos + z_orig_offset;
+                            float C = -z_orig_offset + int(h_tilt_max / 2);
 
                             for (int i = li; i <= ri; i++)   // loop for the xz-plane to perform BP
                             {
-
-                                float x_orig1 = (i - x_orig_offset) * theta_rad_cos -
-                                                (k - z_orig_offset) * theta_rad_sin + x_orig_offset;
-                                float z_orig1 = (i - x_orig_offset) * theta_rad_sin +
-                                                (k - z_orig_offset) * theta_rad_cos + z_orig_offset;
-//                                if (fabs(x_orig1 - x_orig) > 1e-7) {
-//                                    printf("gg1\n");
-//                                    printf("%lf %lf\n", x_orig, x_orig1);
-//                                }
-//                                if (fabs(z_orig1 - z_orig) > 1e-7) {
-//                                    printf("gg2\n");
-//                                    printf("%lf %lf\n", z_orig, z_orig1);
-//                                }
-
-                                int x1 = floor(x_orig1);
-                                int x2 = ceil(x_orig1);
-
-//                                if (x1 != floor(x_orig1)) {
-//                                    printf("gg3\n");
-//                                    printf("%d %d\n", x1, int(floor(x_orig1)));
-//                                    cout << x_orig << " " << x_orig1 << endl;
-////                                    printf("%.9f %9f\n", x_orig, x_orig1);
-//                                }
-//                                if (x2 != ceil(x_orig1)) {
-//                                    printf("gg4\n");
-//                                    printf("%d %d\n", x2, int(ceil(x_orig1)));
-////                                    printf("%.9f %9f\n", x_orig, x_orig1);
-//                                    cout << x_orig << " " << x_orig1 << endl;
-//                                }
-
-                                float coeff = x_orig1 - x1;
-                                int n_z = floor(((z_orig1 - z_orig_offset) + int(h_tilt_max / 2)) / defocus_step);
-//                                int n_z1 = floor(((z_orig1 - z_orig_offset) + int(h_tilt_max / 2)) / defocus_step);
-//
-//                                if (n_z != n_z1) {
-//                                    printf("gg5\n");
-//                                    printf("%d %d\n", n_z, n_z1);
-//
-//                                }
-
+                                float x_orig = (i - x_orig_offset) * theta_rad_cos - A;
+                                float z_orig = (i - x_orig_offset) * theta_rad_sin + B;
+                                int x1 = floor(x_orig);
+                                int x2 = ceil(x_orig);
+                                float coeff = x_orig - x1;
+                                int n_z = floor((z_orig + C) / defocus_step);
                                 // the num in the corrected stack for the current height
-
                                 stack_recon[j][i + k * Nx] +=
                                         (1 - coeff) * stack_corrected[n_z][j * Nx + x1] +
                                         (coeff) * stack_corrected[n_z][j * Nx + x2];
-//                                x_orig += theta_rad_cos;
-//                                z_orig += theta_rad_sin;
                             }
                         }
                     }

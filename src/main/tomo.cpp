@@ -19,6 +19,13 @@
 #include "CTFAlgo.h"
 #include "ReconstructionAlgo_WBP_RAM.h"
 #include "time.h"
+#include <sys/time.h>
+
+double GetTime2() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (double) tv.tv_sec + (double) tv.tv_usec / 1000000;
+}
 
 void getTime(time_t start_time) {
     time_t end_time;
@@ -49,6 +56,8 @@ int main(int argc, char **argv) {
 
     time_t start_time;
     time(&start_time);
+
+    double t_start = GetTime2();
 
     map<string, string> inputPara;
     map<string, string> outputPara;
@@ -88,6 +97,7 @@ int main(int argc, char **argv) {
 
     cout << endl << "Finish!" << endl;
     getTime(start_time);
+    printf("tot cost %.5f\n", GetTime2() - t_start);
 
     return 0;
 }
