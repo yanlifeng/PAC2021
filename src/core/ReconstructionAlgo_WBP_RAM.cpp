@@ -27,6 +27,8 @@
 
 const int threadNumber = 128;
 
+const double eps = 1e-7;
+
 
 double GetTime() {
     struct timeval tv;
@@ -858,7 +860,14 @@ last cost 0.00014
                         fftwf_execute(plan_ifft[thread_id]);
 //                        printf("fftw cost %.5f\n", GetTime() - tt0);
 //                        tt0 = GetTime();
-                        fft2buf(image, bufc_thread[thread_id], Nx, Ny);
+//                        fft2buf(image, bufc_thread[thread_id], Nx, Ny);
+                        {
+                            int nxb = Nx + 2 - Nx % 2;
+//                            memset(image, 0, sizeof(float) * Nx * Ny);
+                            for (int i = 0; i < Ny; i++) {
+                                memcpy(image + i * Nx, bufc_thread[thread_id] + i * nxb, sizeof(float) * Nx);
+                            }
+                        }
 //                        printf("fft2buf cost %.5f\n", GetTime() - tt0);
 //                        tt0 = GetTime();
                         for (int i = 0; i < Nx * Ny; i++)image[i] = image[i] / (Nx * Ny);
@@ -921,8 +930,8 @@ last cost 0.00014
                             {
                                 float x_orig = (i - x_orig_offset) * theta_rad_cos - A;
                                 float z_orig = (i - x_orig_offset) * theta_rad_sin + B;
-                                int x1 = floor(x_orig);
-                                int x2 = ceil(x_orig);
+                                int x1 = int(x_orig);
+                                int x2 = int(x_orig + 1 - eps);
                                 float coeff = x_orig - x1;
                                 int n_z = floor((z_orig + C) / defocus_step);
                                 // the num in the corrected stack for the current height

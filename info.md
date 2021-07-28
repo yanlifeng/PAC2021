@@ -6,6 +6,7 @@
 - [ ] vectorize
 - [ ] check！
 - [ ] icpc ？？？
+- [ ] why 3DCTF nx * ny --> (nx+2-nx%2) * ny
 
 
 
