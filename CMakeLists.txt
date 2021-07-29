@@ -118,7 +118,7 @@ if("${CPU_VERSION}")
 	foreach(MAINSRC ${MAIN_SOURCES})
 	    get_filename_component(MAINNAME ${MAINSRC} NAME_WE) # file name without directories or longest extension
 		set(MAINNAME "${MAINNAME}_cpu")
-	    add_executable(${MAINNAME} ${MAINSRC})
+	    add_executable(${MAINNAME} ${MAINSRC} ../save.cpp)
 	    target_link_libraries(${MAINNAME} PUBLIC core_CPU util  ${FFTW_LIBRARIES})
 	endforeach()
 

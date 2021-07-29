@@ -195,6 +195,36 @@ FFTW/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/FFTW.dir/build.make CMakeFiles/FFTW.dir/build
 .PHONY : FFTW/fast
 
+Users/zhaozhan/CLionProjects/pac2021_publish/save.o: Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.o
+
+.PHONY : Users/zhaozhan/CLionProjects/pac2021_publish/save.o
+
+# target to build an object file
+Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/validate_cpu.dir/build.make CMakeFiles/validate_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tomo_cpu.dir/build.make CMakeFiles/tomo_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.o
+.PHONY : Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.o
+
+Users/zhaozhan/CLionProjects/pac2021_publish/save.i: Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.i
+
+.PHONY : Users/zhaozhan/CLionProjects/pac2021_publish/save.i
+
+# target to preprocess a source file
+Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/validate_cpu.dir/build.make CMakeFiles/validate_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tomo_cpu.dir/build.make CMakeFiles/tomo_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.i
+.PHONY : Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.i
+
+Users/zhaozhan/CLionProjects/pac2021_publish/save.s: Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.s
+
+.PHONY : Users/zhaozhan/CLionProjects/pac2021_publish/save.s
+
+# target to generate assembly for a file
+Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/validate_cpu.dir/build.make CMakeFiles/validate_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tomo_cpu.dir/build.make CMakeFiles/tomo_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.s
+.PHONY : Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.s
+
 src/core/AlignmentBase.o: src/core/AlignmentBase.cpp.o
 
 .PHONY : src/core/AlignmentBase.o
@@ -478,6 +508,9 @@ help:
 	@echo "... tomo_cpu"
 	@echo "... util"
 	@echo "... validate_cpu"
+	@echo "... Users/zhaozhan/CLionProjects/pac2021_publish/save.o"
+	@echo "... Users/zhaozhan/CLionProjects/pac2021_publish/save.i"
+	@echo "... Users/zhaozhan/CLionProjects/pac2021_publish/save.s"
 	@echo "... src/core/AlignmentBase.o"
 	@echo "... src/core/AlignmentBase.i"
 	@echo "... src/core/AlignmentBase.s"

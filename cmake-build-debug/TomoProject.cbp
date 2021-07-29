@@ -278,6 +278,10 @@
 		<Unit filename="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/util/util.cpp">
 			<Option target="util"/>
 		</Unit>
+		<Unit filename="/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp">
+			<Option target="validate_cpu"/>
+			<Option target="tomo_cpu"/>
+		</Unit>
 		<Unit filename="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/CMakeLists.txt">
 			<Option virtualFolder="CMake Files\"/>
 		</Unit>

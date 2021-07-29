@@ -1,17 +1,17 @@
 /*******************************************************************
- *       Filename:  ReconstructionAlgo.cpp                                     
- *                                                                 
- *    Description:                                        
- *                                                                 
- *        Version:  1.0                                            
- *        Created:  07/07/2020 05:40:48 PM                                 
- *       Revision:  none                                           
- *       Compiler:  gcc                                           
- *                                                                 
- *         Author:  Ruan Huabin                                      
- *          Email:  ruanhuabin@tsinghua.edu.cn                                        
- *        Company:  Dep. of CS, Tsinghua Unversity                                      
- *                                                                 
+ *       Filename:  ReconstructionAlgo.cpp
+ *
+ *    Description:
+ *
+ *        Version:  1.0
+ *        Created:  07/07/2020 05:40:48 PM
+ *       Revision:  none
+ *       Compiler:  gcc
+ *
+ *         Author:  Ruan Huabin
+ *          Email:  ruanhuabin@tsinghua.edu.cn
+ *        Company:  Dep. of CS, Tsinghua Unversity
+ *
  *******************************************************************/
 #include "ReconstructionAlgo_WBP_RAM.h"
 #include "mrc.h"
@@ -280,7 +280,9 @@ static void ctf_correction(float *image,int Nx,int Ny,CTF ctf,bool flip_contrast
 static void
 ctf_correction_perbufc(int Nx, int Ny,float defocus1,float defocus2,float astig,float lambda,float phase_shift,float w_sin,float w_cos,float pix,float Cs, bool flip_contrast, float z_offset,float *bufc)   // z_offset in pixels
 {
+
     // loop: Ny (all Fourier components for y-axis)
+
 //#pragma omp parallel for
     int Nxc = Nx + 2 -(Nx&1);
     for (int j = 0; j < Ny; j++) {
@@ -291,7 +293,7 @@ ctf_correction_perbufc(int Nx, int Ny,float defocus1,float defocus2,float astig,
         float y_real_2 = y_real*y_real;
         // 特殊处理 x_norm = 0
         {
-            int ctf_now = 0;
+            float ctf_now;
             float x_norm = 0;
             float x_real = 0;
             float alpha;
@@ -312,13 +314,13 @@ ctf_correction_perbufc(int Nx, int Ny,float defocus1,float defocus2,float astig,
             if (flip_contrast) {
                 ctf_now = -ctf_now;
             }
-            ctf_now = 1-(((*((unsigned int*)&ctf_now)) >> 31) << 1);
+            ctf_now = 1-(int)(((*((unsigned int*)&ctf_now)) >> 31) << 1);
             bufc[j * Nxc] *= ctf_now;
             bufc[1 + j * Nxc] *= ctf_now;
         }
         for (int i = 2; i < Nxc; i += 2) {
             //float ctf_now = ctf.computeCTF2D(i / 2, j, Nx, Ny, true, flip_contrast, z_offset);
-            int ctf_now = 0;
+            float ctf_now;
             {
                 float x = i / 2;
                 float x_norm = (x >= int(ceil(float(Nx + 1) / 2))) ? (x - Nx) : (x);
@@ -334,13 +336,12 @@ ctf_correction_perbufc(int Nx, int Ny,float defocus1,float defocus2,float astig,
                 if (flip_contrast) {
                     ctf_now = -ctf_now;
                 }
-                ctf_now = 1-(((*((unsigned int*)&ctf_now)) >> 31) << 1);
+                ctf_now = 1-(int)(((*((unsigned int*)&ctf_now)) >> 31) << 1);
             }
             bufc[i + j * Nxc] *= ctf_now;
             bufc[(i + 1) + j * Nxc] *= ctf_now;
         }
     }
-
     fftwf_plan plan_ifft;
 #pragma omp critical
     {
@@ -348,7 +349,8 @@ ctf_correction_perbufc(int Nx, int Ny,float defocus1,float defocus2,float astig,
                                           FFTW_ESTIMATE);
     }
     fftwf_execute(plan_ifft);
-    //fft2buf(image, bufc, Nx, Ny);
+  //  fft2buf(image, bufc, Nx, Ny);
+#pragma omp simd
     for (int i = 0; i < Nxc * Ny; i++)   // normalization
     {
         bufc[i] = bufc[i] / (Nx * Ny);
@@ -359,7 +361,6 @@ ctf_correction_perbufc(int Nx, int Ny,float defocus1,float defocus2,float astig,
     }
     //delete[] bufc;
 }
-
 
 ReconstructionAlgo_WBP_RAM::~ReconstructionAlgo_WBP_RAM() {
 
@@ -819,16 +820,14 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                      *  这里加openmp 会出错
                      *  浮点数例外
                      */
+                    int Nxc = Nx + 2 - Nx % 2;
                     int zz_l = -int(h_tilt_max / 2);
                     int zz_r = int(h_tilt_max / 2);
-                    int Nxc = (Nx + 2 - Nx % 2);
                     fftwf_plan plan_fft;
-                    float *bufc_pre = new float[Nxc * Ny];
-
-                    plan_fft = fftwf_plan_dft_r2c_2d(Ny, Nx, (float *) bufc_pre, reinterpret_cast<fftwf_complex *>(bufc_pre),FFTW_ESTIMATE);
-                    buf2fft(image_now, bufc_pre, Nx, Ny);
+                    float *bufc = new float[Nxc * Ny];
+                    plan_fft = fftwf_plan_dft_r2c_2d(Ny, Nx, (float *) bufc, reinterpret_cast<fftwf_complex *>(bufc),FFTW_ESTIMATE);
+                    buf2fft(image_now, bufc, Nx, Ny);
                     fftwf_execute(plan_fft);
-
                     float defocus1 =  ctf_para[n].getDefocus1();
                     float defocus2 =  ctf_para[n].getDefocus2();
                     float astig =  ctf_para[n].getAstigmatism();
@@ -838,19 +837,20 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     float w_cos =  ctf_para[n].getWCos();
                     float pix =  ctf_para[n].getPixelSize();
                     float Cs =  ctf_para[n].getCs();
-                    // defocus1,defocus2,astig,lambda,phase_shift,w_sin,w_cos,pix,Cs
+                    // defocus1,defocus2,astig,lamba,phase_shift,w_sin,w_cos,pix,Cs
 #pragma omp parallel for
                     for (int zz = zz_l;
                          zz < zz_r; zz += defocus_step)    // loop over every height (correct with different defocus)
                     {
                         int n_z = (zz + zz_r) / defocus_step;
                         stack_corrected[n_z] = new float[Nxc * Ny];
-                        memcpy(stack_corrected[n_z],bufc_pre,Nxc * Ny*sizeof(float));
+                        memcpy(stack_corrected[n_z],bufc,Nxc * Ny*sizeof(float));
+
                         ctf_correction_perbufc(Nx, Ny, defocus1,defocus2,astig,lambda,phase_shift,w_sin,w_cos,pix,Cs,
-                                       flip_contrast, float(zz) + float(defocus_step - 1) / 2,stack_corrected[n_z]);
+                                               flip_contrast, float(zz) + float(defocus_step - 1) / 2,stack_corrected[n_z]);
                     }
                     n_zz += ((zz_r-zz_l-1)/defocus_step+1);
-                    delete [] bufc_pre;
+                    delete [] bufc;
                     fftwf_destroy_plan(plan_fft);
                     TEND(ctf_correction)
                     TPRINT(ctf_correction, "ctf_correction time is")
@@ -897,12 +897,12 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 int x_orig_r = ceil(x_orig);
                                 int n_z = (int)((z_orig - z_orig_offset + int(h_tilt_max / 2) ) /
                                                 defocus_step);    // the num in the corrected stack for the current height
-                                                // 上面这行代码一动就精度大问题 例如 int(h_tilt_max / 2) -> zz_r
+                                // 上面这行代码一动就精度大问题 例如 int(h_tilt_max / 2) -> zz_r
                                 float coeff = x_orig - x_orig_l;
-                                stack_recon[j][i + k * Nx] += (1 - coeff) * stack_corrected[n_z][j * Nx + x_orig_l] + (coeff)*stack_corrected[n_z][j*Nx + x_orig_r];
+                                stack_recon[j][i + k * Nx] += (1 - coeff) * stack_corrected[n_z][j * Nxc + x_orig_l] + (coeff)*stack_corrected[n_z][j*Nxc + x_orig_r];
                             }
                         }
-                   }
+                    }
                     TEND(recon_now)
                     TPRINT(recon_now, "recon_now time is")
 
