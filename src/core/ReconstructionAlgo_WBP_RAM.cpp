@@ -278,16 +278,9 @@ static void ctf_correction(float *image,int Nx,int Ny,CTF ctf,bool flip_contrast
 
 
 static void
-ctf_correction_perbufc(float *image, int Nx, int Ny,float defocus1,float defocus2,float astig,float lamba,float phase_shift,float w_sin,float w_cos,float pix,float Cs, bool flip_contrast, float z_offset,float *bufc)   // z_offset in pixels
+ctf_correction_perbufc(int Nx, int Ny,float defocus1,float defocus2,float astig,float lambda,float phase_shift,float w_sin,float w_cos,float pix,float Cs, bool flip_contrast, float z_offset,float *bufc)   // z_offset in pixels
 {
-    fftwf_plan plan_ifft;
-#pragma omp critical
-    {
-        plan_ifft = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(bufc), (float *) bufc,
-                                          FFTW_ESTIMATE);
-    }
     // loop: Ny (all Fourier components for y-axis)
-    float ctf_now = 0;
 //#pragma omp parallel for
     int Nxc = Nx + 2 -(Nx&1);
     for (int j = 0; j < Ny; j++) {
@@ -298,6 +291,7 @@ ctf_correction_perbufc(float *image, int Nx, int Ny,float defocus1,float defocus
         float y_real_2 = y_real*y_real;
         // 特殊处理 x_norm = 0
         {
+            int ctf_now = 0;
             float x_norm = 0;
             float x_real = 0;
             float alpha;
@@ -318,17 +312,13 @@ ctf_correction_perbufc(float *image, int Nx, int Ny,float defocus1,float defocus
             if (flip_contrast) {
                 ctf_now = -ctf_now;
             }
-            ctf_now = 1.0-(((*((unsigned int*)&ctf_now)) >> 31) << 1);
-//                if (ctf_now >= 0) {
-//                    ctf_now = 1.0;
-//                } else {
-//                    ctf_now = -1.0;
-//                }
+            ctf_now = 1-(((*((unsigned int*)&ctf_now)) >> 31) << 1);
             bufc[j * Nxc] *= ctf_now;
             bufc[1 + j * Nxc] *= ctf_now;
         }
         for (int i = 2; i < Nxc; i += 2) {
             //float ctf_now = ctf.computeCTF2D(i / 2, j, Nx, Ny, true, flip_contrast, z_offset);
+            int ctf_now = 0;
             {
                 float x = i / 2;
                 float x_norm = (x >= int(ceil(float(Nx + 1) / 2))) ? (x - Nx) : (x);
@@ -344,24 +334,24 @@ ctf_correction_perbufc(float *image, int Nx, int Ny,float defocus1,float defocus
                 if (flip_contrast) {
                     ctf_now = -ctf_now;
                 }
-                ctf_now = 1.0-(((*((unsigned int*)&ctf_now)) >> 31) << 1);
-//                if (ctf_now >= 0) {
-//                    ctf_now = 1.0;
-//                } else {
-//                    ctf_now = -1.0;
-//                }
+                ctf_now = 1-(((*((unsigned int*)&ctf_now)) >> 31) << 1);
             }
             bufc[i + j * Nxc] *= ctf_now;
             bufc[(i + 1) + j * Nxc] *= ctf_now;
         }
     }
 
-    fftwf_execute(plan_ifft);
-    fft2buf(image, bufc, Nx, Ny);
-#pragma omp simd
-    for (int i = 0; i < Nx * Ny; i++)   // normalization
+    fftwf_plan plan_ifft;
+#pragma omp critical
     {
-        image[i] = image[i] / (Nx * Ny);
+        plan_ifft = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(bufc), (float *) bufc,
+                                          FFTW_ESTIMATE);
+    }
+    fftwf_execute(plan_ifft);
+    //fft2buf(image, bufc, Nx, Ny);
+    for (int i = 0; i < Nxc * Ny; i++)   // normalization
+    {
+        bufc[i] = bufc[i] / (Nx * Ny);
     }
 #pragma omp critical
     {
@@ -831,11 +821,14 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                      */
                     int zz_l = -int(h_tilt_max / 2);
                     int zz_r = int(h_tilt_max / 2);
+                    int Nxc = (Nx + 2 - Nx % 2);
                     fftwf_plan plan_fft;
-                    float *bufc = new float[(Nx + 2 - Nx % 2) * Ny];
-                    plan_fft = fftwf_plan_dft_r2c_2d(Ny, Nx, (float *) bufc, reinterpret_cast<fftwf_complex *>(bufc),FFTW_ESTIMATE);
-                    buf2fft(image_now, bufc, Nx, Ny);
+                    float *bufc_pre = new float[Nxc * Ny];
+
+                    plan_fft = fftwf_plan_dft_r2c_2d(Ny, Nx, (float *) bufc_pre, reinterpret_cast<fftwf_complex *>(bufc_pre),FFTW_ESTIMATE);
+                    buf2fft(image_now, bufc_pre, Nx, Ny);
                     fftwf_execute(plan_fft);
+
                     float defocus1 =  ctf_para[n].getDefocus1();
                     float defocus2 =  ctf_para[n].getDefocus2();
                     float astig =  ctf_para[n].getAstigmatism();
@@ -845,25 +838,19 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     float w_cos =  ctf_para[n].getWCos();
                     float pix =  ctf_para[n].getPixelSize();
                     float Cs =  ctf_para[n].getCs();
-                    // defocus1,defocus2,astig,lamba,phase_shift,w_sin,w_cos,pix,Cs
+                    // defocus1,defocus2,astig,lambda,phase_shift,w_sin,w_cos,pix,Cs
 #pragma omp parallel for
                     for (int zz = zz_l;
                          zz < zz_r; zz += defocus_step)    // loop over every height (correct with different defocus)
                     {
-                        float *bufc_now = new float[(Nx + 2 - Nx % 2) * Ny];
-                        memcpy(bufc_now,bufc,(Nx + 2 - Nx % 2) * Ny*sizeof(float));
                         int n_z = (zz + zz_r) / defocus_step;
-                        stack_corrected[n_z] = new float[Nx * Ny];
-                        ctf_correction_perbufc(stack_corrected[n_z], Nx, Ny, defocus1,defocus2,astig,lamba,phase_shift,w_sin,w_cos,pix,Cs,
-                                       flip_contrast, float(zz) + float(defocus_step - 1) / 2,bufc_now);
+                        stack_corrected[n_z] = new float[Nxc * Ny];
+                        memcpy(stack_corrected[n_z],bufc_pre,Nxc * Ny*sizeof(float));
+                        ctf_correction_perbufc(Nx, Ny, defocus1,defocus2,astig,lambda,phase_shift,w_sin,w_cos,pix,Cs,
+                                       flip_contrast, float(zz) + float(defocus_step - 1) / 2,stack_corrected[n_z]);
                     }
                     n_zz += ((zz_r-zz_l-1)/defocus_step+1);
-//                    if (n_zz!=((zz_r-zz_l)/defocus_step+1)){
-//                        printf("\t\t It is Wrong!!!\n");
-//                        printf("\t\t n_zz is %d ((zz_r-zz_l)/defocus_step)+1 is %d\n",n_zz,(zz_r-zz_l)/defocus_step+1);
-//                    }
-                    //delete [] image_now_temp;
-                    delete [] bufc;
+                    delete [] bufc_pre;
                     fftwf_destroy_plan(plan_fft);
                     TEND(ctf_correction)
                     TPRINT(ctf_correction, "ctf_correction time is")
