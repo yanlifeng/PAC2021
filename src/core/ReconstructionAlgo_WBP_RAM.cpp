@@ -278,7 +278,7 @@ static void ctf_correction(float *image,int Nx,int Ny,CTF ctf,bool flip_contrast
 
 
 static void
-ctf_correction_perbufc(float *image, int Nx, int Ny, CTF ctf, bool flip_contrast, float z_offset,float *bufc)   // z_offset in pixels
+ctf_correction_perbufc(float *image, int Nx, int Ny,float defocus1,float defocus2,float astig,float lamba,float phase_shift,float w_sin,float w_cos,float pix,float Cs, bool flip_contrast, float z_offset,float *bufc)   // z_offset in pixels
 {
     fftwf_plan plan_ifft;
 #pragma omp critical
@@ -287,15 +287,6 @@ ctf_correction_perbufc(float *image, int Nx, int Ny, CTF ctf, bool flip_contrast
                                           FFTW_ESTIMATE);
     }
     // loop: Ny (all Fourier components for y-axis)
-    float defocus1 = ctf.getDefocus1();
-    float defocus2 = ctf.getDefocus2();
-    float astig = ctf.getAstigmatism();
-    float lambda = ctf.getLambda();
-    float phase_shift = ctf.getPhaseShift();
-    float w_sin = ctf.getWSin();
-    float w_cos = ctf.getWCos();
-    float pix = ctf.getPixelSize();
-    float Cs = ctf.getCs();
     float ctf_now = 0;
 //#pragma omp parallel for
     int Nxc = Nx + 2 -(Nx&1);
@@ -324,9 +315,9 @@ ctf_correction_perbufc(float *image, int Nx, int Ny, CTF ctf, bool flip_contrast
             float chi = M_PI * lambda * df_now * freq2 -
                         M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
             ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
-//            if (flip_contrast) {
-//                ctf_now = -ctf_now;
-//            }
+            if (flip_contrast) {
+                ctf_now = -ctf_now;
+            }
             ctf_now = 1.0-(((*((unsigned int*)&ctf_now)) >> 31) << 1);
 //                if (ctf_now >= 0) {
 //                    ctf_now = 1.0;
@@ -350,9 +341,9 @@ ctf_correction_perbufc(float *image, int Nx, int Ny, CTF ctf, bool flip_contrast
                 float chi = M_PI * lambda * df_now * freq2 -
                             M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
                 ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
-//                if (flip_contrast) {
-//                    ctf_now = -ctf_now;
-//                }
+                if (flip_contrast) {
+                    ctf_now = -ctf_now;
+                }
                 ctf_now = 1.0-(((*((unsigned int*)&ctf_now)) >> 31) << 1);
 //                if (ctf_now >= 0) {
 //                    ctf_now = 1.0;
@@ -843,8 +834,18 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     fftwf_plan plan_fft;
                     float *bufc = new float[(Nx + 2 - Nx % 2) * Ny];
                     plan_fft = fftwf_plan_dft_r2c_2d(Ny, Nx, (float *) bufc, reinterpret_cast<fftwf_complex *>(bufc),FFTW_ESTIMATE);
-                    buf2fft(image_now, bufc, Nx, stack_orig.getNy());
+                    buf2fft(image_now, bufc, Nx, Ny);
                     fftwf_execute(plan_fft);
+                    float defocus1 =  ctf_para[n].getDefocus1();
+                    float defocus2 =  ctf_para[n].getDefocus2();
+                    float astig =  ctf_para[n].getAstigmatism();
+                    float lambda =  ctf_para[n].getLambda();
+                    float phase_shift =  ctf_para[n].getPhaseShift();
+                    float w_sin =  ctf_para[n].getWSin();
+                    float w_cos =  ctf_para[n].getWCos();
+                    float pix =  ctf_para[n].getPixelSize();
+                    float Cs =  ctf_para[n].getCs();
+                    // defocus1,defocus2,astig,lamba,phase_shift,w_sin,w_cos,pix,Cs
 #pragma omp parallel for
                     for (int zz = zz_l;
                          zz < zz_r; zz += defocus_step)    // loop over every height (correct with different defocus)
@@ -853,7 +854,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                         memcpy(bufc_now,bufc,(Nx + 2 - Nx % 2) * Ny*sizeof(float));
                         int n_z = (zz + zz_r) / defocus_step;
                         stack_corrected[n_z] = new float[Nx * Ny];
-                        ctf_correction_perbufc(stack_corrected[n_z], Nx, Ny, ctf_para[n],
+                        ctf_correction_perbufc(stack_corrected[n_z], Nx, Ny, defocus1,defocus2,astig,lamba,phase_shift,w_sin,w_cos,pix,Cs,
                                        flip_contrast, float(zz) + float(defocus_step - 1) / 2,bufc_now);
                     }
                     n_zz += ((zz_r-zz_l-1)/defocus_step+1);
