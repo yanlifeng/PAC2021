@@ -19,6 +19,12 @@
 #include "CTFAlgo.h"
 #include "ReconstructionAlgo_WBP_RAM.h"
 #include "time.h"
+#include <chrono>
+typedef std::chrono::high_resolution_clock Clock;
+#define TDEF(x_) chrono::high_resolution_clock::time_point x_##_t0, x_##_t1;
+#define TSTART(x_) x_##_t0 = Clock::now();
+#define TEND(x_) x_##_t1 = Clock::now();
+#define TPRINT(x_, str) cout << endl << "        " << str << "  " << chrono::duration_cast<chrono::microseconds>(x_##_t1 - x_##_t0).count()/1e6 << "s" << endl << endl;
 
 void getTime(time_t start_time)
 {
@@ -52,7 +58,8 @@ int main(int argc, char **argv)
     }
 
 
-
+    TDEF(SubmissionTime)
+    TSTART(SubmissionTime)
     time_t start_time;
     time(&start_time);
 
@@ -103,6 +110,8 @@ int main(int argc, char **argv)
 
     cout << endl << "Finish!" << endl;
     getTime(start_time);
+    TEND(SubmissionTime)
+    TPRINT(SubmissionTime,"Submission Time is ")
 
     return 0;
 }
