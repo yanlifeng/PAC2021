@@ -784,6 +784,9 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     int zl = -int(h_tilt_max / 2);
                     int zr = int(h_tilt_max / 2);
                     int Nx2 = Nx + 2 - Nx % 2;
+                    int Nxh = Nx / 2 + 1;
+                    int Nyh = Ny / 2 + 1;
+                    int Nyh2 = (Ny + 1) / 2;
 
                     //loop: number of blocks (for 3D-CTF correction)
 
@@ -806,58 +809,157 @@ last cost 0.00014
                         CTF ctf = ctf_para[n];
                         float z_offset = float(zz) + float(defocus_step - 1) / 2;
                         memcpy(image, bufc_pre, sizeof(float) * (Nx2 * Ny));
-                        for (int j = 0; j < Ny; j++) {
-                            for (int i = 0; i < Nx2; i += 2) {
-                                float ctf_now = 0;
-                                {
-                                    float x = i / 2, y = j;
-                                    float defocus1 = ctf.defocus1;
-                                    float defocus2 = ctf.defocus2;
-                                    float astig = ctf.astig;
-                                    float lambda = ctf.lambda;
-                                    float phase_shift = ctf.phase_shift;
-                                    float w_sin = ctf.w_sin;
-                                    float w_cos = ctf.w_cos;
-                                    float pix = ctf.pix;
-                                    float Cs = ctf.Cs;
-
-                                    float x_norm = (x >= int(ceil(float(Nx + 1) / 2))) ? (x - Nx) : (x);
-                                    float y_norm = (y >= int(ceil(float(Ny + 1) / 2))) ? (y - Ny) : (y);
-
-                                    float x_real = float(x_norm) / float(Nx) * (1 / pix);
-                                    float y_real = float(y_norm) / float(Ny) * (1 / pix);
-                                    float alpha;
-                                    if (x_norm == 0) {
-                                        if (y_norm > 0) {
-                                            alpha = M_PI_2;
-                                        } else if (y_norm < 0) {
-                                            alpha = -M_PI_2;
-                                        } else {
-                                            alpha = 0.0;
-                                        }
+                        float defocus1 = ctf.defocus1;
+                        float defocus2 = ctf.defocus2;
+                        float astig = ctf.astig;
+                        float lambda = ctf.lambda;
+                        float phase_shift = ctf.phase_shift;
+                        float w_sin = ctf.w_sin;
+                        float w_cos = ctf.w_cos;
+                        float pix = ctf.pix;
+                        float Cs = ctf.Cs;
+                        float A = (defocus1 + defocus2 - 2 * z_offset * pix);
+                        for (int j = 0; j < min(1, Ny); j++) {
+                            for (int i = 0; i < Nxh; i++) {
+                                float x = i, y = j;
+                                float x_norm = x;
+                                float y_norm = (y >= Nyh) ? (y - Ny) : (y);
+                                float x_real = float(x_norm) / float(Nx) * (1 / pix);
+                                float y_real = float(y_norm) / float(Ny) * (1 / pix);
+                                float alpha;
+                                if (x_norm == 0) {
+                                    if (y_norm > 0) {
+                                        alpha = M_PI_2;
+                                    } else if (y_norm < 0) {
+                                        alpha = -M_PI_2;
                                     } else {
-                                        alpha = atan(y_real / x_real);
+                                        alpha = 0.0;
                                     }
-                                    float freq2 = x_real * x_real + y_real * y_real;
-                                    float df_now =
-                                            ((defocus1 + defocus2 - 2 * z_offset * pix) +
-                                             (defocus1 - defocus2) * cos(2 * (alpha - astig))) / 2.0;
-                                    float chi = M_PI * lambda * df_now * freq2 -
-                                                M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
-                                    float ctf_now_tmp = w_sin * sin(chi) + w_cos * cos(chi);
-                                    if (flip_contrast) {
-                                        ctf_now_tmp = -ctf_now_tmp;
-                                    }
-
-                                    if (ctf_now_tmp >= 0) {
-                                        ctf_now = 1.0;
-                                    } else {
-                                        ctf_now = -1.0;
-                                    }
+                                } else {
+                                    alpha = atan(y_real / x_real);
                                 }
+                                float freq2 = x_real * x_real + y_real * y_real;
+                                float df_now = (A + (defocus1 - defocus2) * cos(2 * (alpha - astig))) / 2.0;
+                                float chi = M_PI * lambda * df_now * freq2 -
+                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
+                                float ctf_now_tmp = w_sin * sin(chi) + w_cos * cos(chi);
+                                if (flip_contrast) {
+                                    ctf_now_tmp = -ctf_now_tmp;
+                                }
+                                if (ctf_now_tmp < 0) {
+                                    image[i * 2 + j * Nx2] *= -1;
+                                    image[(i * 2 + 1) + j * Nx2] *= -1;
+                                }
+                            }
+                        }
+                        for (int j = 0; j < Ny; j++) {
+                            for (int i = 0; i < min(1, Nxh); i++) {
+                                float x = i, y = j;
+                                float x_norm = x;
+                                float y_norm = (y >= Nyh) ? (y - Ny) : (y);
+                                float x_real = float(x_norm) / float(Nx) * (1 / pix);
+                                float y_real = float(y_norm) / float(Ny) * (1 / pix);
+                                float alpha;
+                                if (x_norm == 0) {
+                                    if (y_norm > 0) {
+                                        alpha = M_PI_2;
+                                    } else if (y_norm < 0) {
+                                        alpha = -M_PI_2;
+                                    } else {
+                                        alpha = 0.0;
+                                    }
+                                } else {
+                                    alpha = atan(y_real / x_real);
+                                }
+                                float freq2 = x_real * x_real + y_real * y_real;
+                                float df_now = (A + (defocus1 - defocus2) * cos(2 * (alpha - astig))) / 2.0;
+                                float chi = M_PI * lambda * df_now * freq2 -
+                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
+                                float ctf_now_tmp = w_sin * sin(chi) + w_cos * cos(chi);
+                                if (flip_contrast) {
+                                    ctf_now_tmp = -ctf_now_tmp;
+                                }
+                                if (ctf_now_tmp < 0) {
+                                    image[i * 2 + j * Nx2] *= -1;
+                                    image[(i * 2 + 1) + j * Nx2] *= -1;
+                                }
+                            }
+                        }
 
-                                image[i + j * Nx2] *= ctf_now;
-                                image[(i + 1) + j * Nx2] *= ctf_now;
+
+//                        for (int j = 1; j < Ny; j++) {
+//                            for (int i = 1; i < Nxh; i++) {
+//                                float x_norm = i;
+////                                float y_norm = j;
+//                                float y_norm = (j >= Nyh) ? (j - Ny) : (j);
+//                                float x_real = float(x_norm) / float(Nx) * (1 / pix);
+//                                float y_real = float(y_norm) / float(Ny) * (1 / pix);
+//                                float alpha;
+//
+//                                alpha = atan(y_real / x_real);
+//
+//                                float freq2 = x_real * x_real + y_real * y_real;
+//                                float df_now = (A + (defocus1 - defocus2) * cos(2 * (alpha - astig))) / 2.0;
+//                                float chi = M_PI * lambda * df_now * freq2 -
+//                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
+//                                float ctf_now_tmp = w_sin * sin(chi) + w_cos * cos(chi);
+//                                if (flip_contrast) {
+//                                    ctf_now_tmp = -ctf_now_tmp;
+//                                }
+//                                if (ctf_now_tmp < 0) {
+//                                    image[i * 2 + j * Nx2] *= -1;
+//                                    image[(i * 2 + 1) + j * Nx2] *= -1;
+//                                }
+//                            }
+//                        }
+//
+                        for (int j = 1; j < Nyh; j++) {
+                            for (int i = 1; i < Nxh; i++) {
+                                float x_norm = i;
+                                float y_norm = j;
+                                float x_real = float(x_norm) / float(Nx) * (1 / pix);
+                                float y_real = float(y_norm) / float(Ny) * (1 / pix);
+                                float alpha;
+
+                                alpha = atan(y_real / x_real);
+
+                                float freq2 = x_real * x_real + y_real * y_real;
+                                float df_now = (A + (defocus1 - defocus2) * cos(2 * (alpha - astig))) / 2.0;
+                                float chi = M_PI * lambda * df_now * freq2 -
+                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
+                                float ctf_now_tmp = w_sin * sin(chi) + w_cos * cos(chi);
+                                if (flip_contrast) {
+                                    ctf_now_tmp = -ctf_now_tmp;
+                                }
+                                if (ctf_now_tmp < 0) {
+                                    image[i * 2 + j * Nx2] *= -1;
+                                    image[(i * 2 + 1) + j * Nx2] *= -1;
+                                }
+                            }
+                        }
+                        for (int j = Nyh; j < Ny; j++) {
+                            for (int i = 1; i < Nxh; i++) {
+                                float x = i, y = j;
+                                float x_norm = i;
+                                float y_norm = j - Ny;
+                                float x_real = float(x_norm) / float(Nx) * (1 / pix);
+                                float y_real = float(y_norm) / float(Ny) * (1 / pix);
+                                float alpha;
+
+                                alpha = atan(y_real / x_real);
+
+                                float freq2 = x_real * x_real + y_real * y_real;
+                                float df_now = (A + (defocus1 - defocus2) * cos(2 * (alpha - astig))) / 2.0;
+                                float chi = M_PI * lambda * df_now * freq2 -
+                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
+                                float ctf_now_tmp = w_sin * sin(chi) + w_cos * cos(chi);
+                                if (flip_contrast) {
+                                    ctf_now_tmp = -ctf_now_tmp;
+                                }
+                                if (ctf_now_tmp < 0) {
+                                    image[i * 2 + j * Nx2] *= -1;
+                                    image[(i * 2 + 1) + j * Nx2] *= -1;
+                                }
                             }
                         }
 
