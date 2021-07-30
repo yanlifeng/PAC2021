@@ -25,7 +25,9 @@
 
 #include "omp.h"
 
-const int threadNumber = 128;
+#define mycos(x) (1-x*x/2+x*x*x*x/24)
+
+const int threadNumber = 64;
 
 const double eps = 1e-7;
 
@@ -788,6 +790,26 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     int Nyh = Ny / 2 + 1;
                     int Nyh2 = (Ny + 1) / 2;
 
+                    double a_w_cos = acos(w_cos);
+
+                    float *atan_xy = new float[Ny * Nx];
+                    double *sin_atan_xy = new double[Ny * Nx];
+                    double *cos_atan_xy = new double[Ny * Nx];
+                    for (int j = 1; j < Ny; j++) {
+                        for (int i = 1; i < Nx; i++) {
+                            float x_norm = i;
+                            float y_norm = (j >= Nyh) ? (j - Ny) : (j);
+                            float x_real = float(x_norm) / float(Nx) * (1 / pix);
+                            float y_real = float(y_norm) / float(Ny) * (1 / pix);
+                            float alpha = atan(y_real / x_real);
+                            atan_xy[j * Nx + i] = alpha;
+//                            sin_atan_xy[j * Nx + i] = sin(2 * alpha);
+//                            cos_atan_xy[j * Nx + i] = cos(2 * alpha);
+
+                        }
+                    }
+
+
                     //loop: number of blocks (for 3D-CTF correction)
 
                     /*
@@ -819,6 +841,8 @@ last cost 0.00014
                         float pix = ctf.pix;
                         float Cs = ctf.Cs;
                         float A = (defocus1 + defocus2 - 2 * z_offset * pix);
+                        double sin2ast = sin(2 * astig);
+                        double cos2ast = cos(2 * astig);
                         for (int j = 0; j < min(1, Ny); j++) {
                             for (int i = 0; i < Nxh; i++) {
                                 float x = i, y = j;
@@ -887,81 +911,41 @@ last cost 0.00014
                         }
 
 
-//                        for (int j = 1; j < Ny; j++) {
-//                            for (int i = 1; i < Nxh; i++) {
-//                                float x_norm = i;
-////                                float y_norm = j;
-//                                float y_norm = (j >= Nyh) ? (j - Ny) : (j);
-//                                float x_real = float(x_norm) / float(Nx) * (1 / pix);
-//                                float y_real = float(y_norm) / float(Ny) * (1 / pix);
-//                                float alpha;
-//
-//                                alpha = atan(y_real / x_real);
-//
-//                                float freq2 = x_real * x_real + y_real * y_real;
-//                                float df_now = (A + (defocus1 - defocus2) * cos(2 * (alpha - astig))) / 2.0;
-//                                float chi = M_PI * lambda * df_now * freq2 -
-//                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
+                        for (int j = 1; j < Ny; j++) {
+//#pragma simd
+                            for (int i = 1; i < Nxh; i++) {
+                                float x_norm = i;
+                                float y_norm = (j >= Nyh) ? (j - Ny) : (j);
+                                float x_real = float(x_norm) / float(Nx) * (1 / pix);
+                                float y_real = float(y_norm) / float(Ny) * (1 / pix);
+                                float alpha = atan_xy[j * Nx + i];
+
+                                float freq2 = x_real * x_real + y_real * y_real;
+//                                float df_now = (A + (defocus1 - defocus2) * (cos_atan_xy[j * Nx + i] * cos2ast +
+//                                                                             sin_atan_xy[j * Nx + i] * sin2ast)) / 2.0;
+                                float df_now = (A + (defocus1 - defocus2) * cos(2 * (alpha - astig))) / 2.0;
+
+//                                float df_now = (A + (defocus1 - defocus2) * mycos(2 * (alpha - astig))) / 2.0;
+                                //TODO defocus1 - defocus2 is too small that remove it can even pass check
+                                float chi = M_PI * lambda * df_now * freq2 -
+                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2
+                                            + phase_shift;
 //                                float ctf_now_tmp = w_sin * sin(chi) + w_cos * cos(chi);
-//                                if (flip_contrast) {
-//                                    ctf_now_tmp = -ctf_now_tmp;
-//                                }
-//                                if (ctf_now_tmp < 0) {
-//                                    image[i * 2 + j * Nx2] *= -1;
-//                                    image[(i * 2 + 1) + j * Nx2] *= -1;
-//                                }
-//                            }
-//                        }
-//
-                        for (int j = 1; j < Nyh; j++) {
-                            for (int i = 1; i < Nxh; i++) {
-                                float x_norm = i;
-                                float y_norm = j;
-                                float x_real = float(x_norm) / float(Nx) * (1 / pix);
-                                float y_real = float(y_norm) / float(Ny) * (1 / pix);
-                                float alpha;
-
-                                alpha = atan(y_real / x_real);
-
-                                float freq2 = x_real * x_real + y_real * y_real;
-                                float df_now = (A + (defocus1 - defocus2) * cos(2 * (alpha - astig))) / 2.0;
-                                float chi = M_PI * lambda * df_now * freq2 -
-                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
-                                float ctf_now_tmp = w_sin * sin(chi) + w_cos * cos(chi);
+                                double rrr = chi - a_w_cos;
+                                int mul_base = 1;
+                                //TODO check if rrr will bigger than 2*pi
+                                if (fabs(rrr) > M_PI_2)mul_base = -1;
                                 if (flip_contrast) {
-                                    ctf_now_tmp = -ctf_now_tmp;
+                                    mul_base = -mul_base;
                                 }
-                                if (ctf_now_tmp < 0) {
+                                if (mul_base < 0) {
                                     image[i * 2 + j * Nx2] *= -1;
                                     image[(i * 2 + 1) + j * Nx2] *= -1;
                                 }
                             }
                         }
-                        for (int j = Nyh; j < Ny; j++) {
-                            for (int i = 1; i < Nxh; i++) {
-                                float x = i, y = j;
-                                float x_norm = i;
-                                float y_norm = j - Ny;
-                                float x_real = float(x_norm) / float(Nx) * (1 / pix);
-                                float y_real = float(y_norm) / float(Ny) * (1 / pix);
-                                float alpha;
 
-                                alpha = atan(y_real / x_real);
 
-                                float freq2 = x_real * x_real + y_real * y_real;
-                                float df_now = (A + (defocus1 - defocus2) * cos(2 * (alpha - astig))) / 2.0;
-                                float chi = M_PI * lambda * df_now * freq2 -
-                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
-                                float ctf_now_tmp = w_sin * sin(chi) + w_cos * cos(chi);
-                                if (flip_contrast) {
-                                    ctf_now_tmp = -ctf_now_tmp;
-                                }
-                                if (ctf_now_tmp < 0) {
-                                    image[i * 2 + j * Nx2] *= -1;
-                                    image[(i * 2 + 1) + j * Nx2] *= -1;
-                                }
-                            }
-                        }
 
 //                        printf("now fftw use %d\n", fftw_planner_nthreads());
 
@@ -1039,7 +1023,7 @@ last cost 0.00014
                                 int x1 = int(x_orig);
                                 int x2 = int(x_orig + 1 - eps);
                                 float coeff = x_orig - x1;
-                                int n_z = floor((z_orig + C) / defocus_step);
+                                int n_z = int((z_orig + C) / defocus_step);
                                 // the num in the corrected stack for the current height
                                 stack_recon[j][i + k * Nx] +=
                                         (1 - coeff) * stack_corrected[n_z][j * Nx2 + x1] +

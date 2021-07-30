@@ -3,11 +3,13 @@
 - [x] Use icc
 - [x] Use intel fftw
 - [x] Simple muti-threading
-- [ ] vectorize
+- [x] vectorize
 - [ ] check！
-- [ ] icpc ？？？
-- [ ] why 3DCTF nx * ny --> (nx+2-nx%2) * ny
+- [x] icpc ？？？
+- [x] why 3DCTF nx * ny --> (nx+2-nx%2) * ny
 - [ ] fftw omp critical
+- [ ] change g++ version
+- [ ] vectorize for Rebu when g++
 
 
 
@@ -290,6 +292,64 @@ for (int j = 0; j < Ny; j++) {
                                 float y_norm = (y >= Nyh) ? (y - Ny) : (y);}}
 ```
 
+无聊换上icpc和icpx试了试
+
+|                                                   |       |       |       |       |             |
+| ------------------------------------------------- | ----- | ----- | ----- | ----- | ----------- |
+| thread128 优化rebu orig等计算  8.41               | 7.721 |       |       | 6.070 | 0.971+0.02  |
+| 3dCTF 优化掉第二次拷贝 7.28                       | 6.588 |       |       | 4.863 |             |
+| weight 和 提出来的fftw 多线程 6.62                | 5.897 |       | 0.288 | 4.460 | 1.043+0.039 |
+| icpx -xHost -qopt-zmm-usage=high （mkl fftw）3.24 | 2.350 | 0.033 | 0.116 | 1.680 | 0.494+0.022 |
+
+杀疯了，不过精度也炸了。
+
+
+
+## 0730
+
+```
+gcc 5.4
+
+-- The C compiler identification is GNU 5.4.0
+-- The CXX compiler identification is GNU 5.4.0
+-- Check for working C compiler: /usr/bin/cc
+-- Check for working C compiler: /usr/bin/cc -- works
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Check for working CXX compiler: /usr/bin/c++
+-- Check for working CXX compiler: /usr/bin/c++ -- works
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Welcome to TomoProject 0.1.20201014!
+-- CMAKE_BUILD_TYPE : release, compile TomoProject with -std=c++11  -fopenmp -O2 flag.
+-- Try to build Tomo-Project in CPU version.
+-- CMAKE_C_FLAGS : -std=c++11  -fopenmp -O2 -lz -lpthread -lm
+-- CMAKE_CXX_FLAGS : -std=c++11  -fopenmp -O2 -lz -lpthread -lm
+-- FFTW_FLAGS : --disable-doc;--enable-threads;--enable-float;--prefix=/home/asc/pac2021_publish/WBP/external/fftw-3.3.7
+-- FFTW_LIBRARIES : /home/asc/pac2021_publish/WBP/external/fftw-3.3.7/lib/libfftw3f.a;/home/asc/pac2021_publish/WBP/external/fftw-3.3.7/lib/libfftw3f_threads.a
+-- FFTW Path: /home/asc/pac2021_publish/WBP/external/fftw-3.3.7
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/asc/pac2021_publish/WBP/build
+
+(presto) asc@ubuntu:~/pac2021_publish/data/proteasome-bin6$  ../../WBP/build/validate_cpu pro_novpp_Cor2_WBP_bin6.rec Result_NewMRCCTF_NewWBP/pro_novpp_Cor2_WBP_bin6.rec
+MRC1 Path:pro_novpp_Cor2_WBP_bin6.rec
+MRC2 Path:Result_NewMRCCTF_NewWBP/pro_novpp_Cor2_WBP_bin6.rec
+mrc1mean: 984.078
+mrc1min: -70729.6
+mrc1max: 63454.6
+mrc2mean: 1001.4
+mrc2max: 63454.7
+The error accumulation of the two volume is: 49136.8
+The summation error of the two volume is: 8192
+The mean error of the two volume is: 17.3234
+The absolute mean error on a single voxel is: 0.000750501
+The relative mean error on a single voxel is: 7.62644e-07
+Validation Failed!
 
 
 
@@ -298,9 +358,102 @@ for (int j = 0; j < Ny; j++) {
 
 
 
+-- The C compiler identification is GNU 9.3.0
+-- The CXX compiler identification is GNU 9.3.0
+-- Check for working C compiler: /usr/bin/cc
+-- Check for working C compiler: /usr/bin/cc -- works
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Check for working CXX compiler: /usr/bin/c++
+-- Check for working CXX compiler: /usr/bin/c++ -- works
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+fatal: not a git repository (or any parent up to mount point /home)
+Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
+-- Welcome to TomoProject 0.1.20201014!
+-- CMAKE_BUILD_TYPE : release, compile TomoProject with -std=c++11  -fopenmp -O2 flag.
+-- Try to build Tomo-Project in CPU version.
+-- CMAKE_C_FLAGS : -std=c++11  -fopenmp -O2 -lz -lpthread -lm
+-- CMAKE_CXX_FLAGS : -std=c++11  -fopenmp -O2 -lz -lpthread -lm
+-- FFTW_FLAGS : --disable-doc;--enable-threads;--enable-float;--prefix=/home/user_home/ylf/pac2021_publish/WBP/external/fftw-3.3.7
+-- FFTW_LIBRARIES : /home/user_home/ylf/pac2021_publish/WBP/external/fftw-3.3.7/lib/libfftw3f.a;/home/user_home/ylf/pac2021_publish/WBP/external/fftw-3.3.7/lib/libfftw3f_threads.a
+-- FFTW Path: /home/user_home/ylf/pac2021_publish/WBP/external/fftw-3.3.7
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/user_home/ylf/pac2021_publish/WBP/build
+
+MRC1 Path:pro_novpp_Cor2_WBP_bin6.rec
+MRC2 Path:Result_NewMRCCTF_NewWBP/pro_novpp_Cor2_WBP_bin6.rec
+mrc1mean: 984.079
+mrc1min: -70729.9
+mrc1max: 63454.5
+mrc2mean: 1001.4
+mrc2max: 63454.7
+The error accumulation of the two volume is: 4.38686e+06
+The summation error of the two volume is: 61440
+The mean error of the two volume is: 17.3233
+The absolute mean error on a single voxel is: 0.0670036
+The relative mean error on a single voxel is: 6.80876e-05
+Validation Failed!
+```
 
 
 
+icpc把参数precise改成strict
+
+```
+strict
+Enables precise and except, disables contractions, and enables pragma stdc fenv_access.
+
+[no-]except (Linux* and macOS*) or except[-] (Windows* )
+Determines whether strict floating-point exception semantics are honored.
+
+
+```
+
+see more in https://software.intel.com/content/www/us/en/develop/documentation/cpp-compiler-developer-guide-and-reference/top/compiler-reference/compiler-options/compiler-option-details/floating-point-options/fp-model-fp.html
+
+New icpc
+
+| Verison                                         | Cpp tot | Read  | Weight | CTF     | Rebu        | Total     |
+| ----------------------------------------------- | ------- | ----- | ------ | ------- | ----------- | --------- |
+| weight 和 提出来的fftw 多线程                   | 5.897   |       | 0.288  | 4.460   | 1.043+0.039 | 6.62      |
+| icpx -xHost -qopt-zmm-usage=high （mkl fftw）   | 2.350   | 0.033 | 0.116  | 1.680   | 0.494+0.022 | 3.24      |
+| -fp-model strict -xHost -qopt-zmm-usage=high 64 | 6.093   | 0.063 | 0.326  | 5.260   | 0.339+0.098 | 6.99      |
+| -fp-model strict -xHost -qopt-zmm-usage=high 32 | 9.042   | 0.057 | 0.202  | 7.500   | 0.424+0.851 | 9.97      |
+| -fp-model strict -xHost -qopt-zmm-usage=high 16 | 13.665  | 0.061 | 0.177  | 11.999  | 0.702+0.716 | 14.54     |
+| -fp-model strict -xHost -qopt-zmm-usage=high 8  | 23.361  | 0.060 | 0.189  | 21.129  | 1.246+0.723 | 24.27947  |
+| -fp-model strict -xHost -qopt-zmm-usage=high 4  | 42.909  | 0.063 | 0.208  | 39.524  | 2.362+0.736 | 43.80787  |
+| -fp-model strict -xHost -qopt-zmm-usage=high 2  | 84.234  | 0.060 | 0.243  | 78.397  | 4.740+0.759 | 85.11350  |
+| -fp-model strict -xHost -qopt-zmm-usage=high 1  | 164.341 | 0.064 | 0.289  | 154.657 | 8.687+0.586 | 165.23959 |
+| 1 mkl fftw x                                    | 137.399 |       |        | 128.187 |             | 138.32196 |
+| 64 fftw_256 x                                   | 5.912   | 0.065 | 0.317  | 5.119   | 0.348+0.057 | 6.78638   |
+
+关键就是CTF的向量化，mkl的fftw估计是暂时不能用了。
+
+关于CTF中的三角函数，可以通过预处理或者是化简等方式优化他们：
+
+| Verison                                         | Cpp tot | Read  | Weight | CTF   | Rebu        | Total |
+| ----------------------------------------------- | ------- | ----- | ------ | ----- | ----------- | ----- |
+| weight 和 提出来的fftw 多线程                   | 5.897   |       | 0.288  | 4.460 | 1.043+0.039 | 6.62  |
+| icpx -xHost -qopt-zmm-usage=high （mkl fftw）   | 2.350   | 0.033 | 0.116  | 1.680 | 0.494+0.022 | 3.24  |
+| -fp-model strict -xHost -qopt-zmm-usage=high 64 | 6.093   | 0.063 | 0.326  | 5.260 | 0.339+0.098 | 6.99  |
+| 😄优化CTF中的三角函数                            | 3.932   |       |        | 3.212 |             | 4.91  |
+| 🤔cos(2 * (alpha - astig))也去掉                 | 5.308   |       |        | 4.524 |             | 6.28  |
+| 😄换成g++ 128                                    | 4.487   |       |        | 2.984 | 1.169+0.014 | 5.21  |
+
+可以看到g++也差不太多了，只是Rebu没有开启向量化。。。。。
+
+晚上和启鑫凯子哥聊了一下，有一下几个点可以借鉴
+
+- cos(x)= x - ((x * x * x) / 6) + ((x * x * x * x * x) / 120)
+- CTF中的cos(2 * (alpha - astig))直接把atan带进去，抵消掉三角函数
+
+上面这两个策略，第二个和👆Version中🤔差不多，都是通过多余的计算把cos去掉，但🤔效果不好，这个目测也一般；第一个不能保证精度，试了试可以通过但是defocus1 - defocus2太小了，不确定是为啥能过。
 
 
 
