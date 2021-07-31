@@ -29,7 +29,7 @@
 
 #define mycos(x) (1-x*x/2+x*x*x*x/24)
 
-const int threadNumber = 1;
+const int threadNumber = 64;
 
 const float eps = 1e-7;
 
@@ -1043,8 +1043,8 @@ last cost 0.00014
 
                             __m512 one_con = _mm512_set1_ps(1);
 
-                            static int cnt = 100;
-                            bool checcc = 0;
+//                            static int cnt = 100;
+//                            bool checcc = 0;
                             for (; i + 16 <= ri + 1; i += 16) {
 
 
@@ -1052,31 +1052,31 @@ last cost 0.00014
                                 //float x_orig = (i - x_orig_offset) * theta_rad_cos - A;
                                 //float z_orig = (i - x_orig_offset) * theta_rad_sin + B;
 
-                                if (cnt <= 10) {
-                                    int tmp[16];
-                                    _mm512_store_epi32(tmp, idx);
-                                    cout << "idx cal:" << endl;
-                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
-                                    cout << endl;
-                                    cout << "idx std:" << endl;
-                                    for (int ii = 0; ii < 16; ii++)printf("%d ", i + ii);
-                                    cout << endl;
-                                }
+//                                if (cnt <= 10) {
+//                                    int tmp[16];
+//                                    _mm512_store_epi32(tmp, idx);
+//                                    cout << "idx cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "idx std:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", i + ii);
+//                                    cout << endl;
+//                                }
 
 //                                cnt++;
                                 //i - x_orig_offset
                                 __m512 sub_tmp = _mm512_sub_ps(_mm512_cvtepi32_ps(idx), offset_con);
 
-                                if (cnt <= 10) {
-                                    float tmp[16];
-                                    _mm512_store_ps(tmp, sub_tmp);
-                                    cout << "sub_tmp cal:" << endl;
-                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
-                                    cout << endl;
-                                    cout << "sub_tmp std:" << endl;
-                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", i + ii - x_orig_offset);
-                                    cout << endl;
-                                }
+//                                if (cnt <= 10) {
+//                                    float tmp[16];
+//                                    _mm512_store_ps(tmp, sub_tmp);
+//                                    cout << "sub_tmp cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "sub_tmp std:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", i + ii - x_orig_offset);
+//                                    cout << endl;
+//                                }
 
                                 //select pre 8 float to f0, last 8 to f1
                                 __m256 f0 = _mm512_extractf32x8_ps(sub_tmp, 0);
@@ -1158,28 +1158,28 @@ last cost 0.00014
 //                                        printf("%.3f ", (i + ii - x_orig_offset) * theta_rad_sin + B);
 //                                    cout << endl;
 //                                }
-                                if (checcc) {
-                                    float tmp1[16];
-                                    _mm512_store_ps(tmp1, x_ori);
-                                    float tmp2[16];
-                                    _mm512_store_ps(tmp2, z_ori);
-                                    for (int ii = 0; ii < 16; ii++) {
-                                        float x_orig = (ii + i - x_orig_offset) * theta_rad_cos - A;
-                                        float z_orig = (ii + i - x_orig_offset) * theta_rad_sin + B;
-                                        if (fabs(x_orig - tmp1[ii]) > 1e-5) {
-                                            printf("GG\n");
-                                            printf("x_orig on %d %d %d\n", j, k, i + ii);
-                                            printf("%.6f %.6f\n", x_orig, tmp1[ii]);
-                                            exit(0);
-                                        }
-                                        if (fabs(z_orig - tmp2[ii]) > 1e-5) {
-                                            printf("GG\n");
-                                            printf("z_orig on %d %d %d\n", j, k, i + ii);
-                                            printf("%.6f %.6f\n", z_orig, tmp2[ii]);
-                                            exit(0);
-                                        }
-                                    }
-                                }
+//                                if (checcc) {
+//                                    float tmp1[16];
+//                                    _mm512_store_ps(tmp1, x_ori);
+//                                    float tmp2[16];
+//                                    _mm512_store_ps(tmp2, z_ori);
+//                                    for (int ii = 0; ii < 16; ii++) {
+//                                        float x_orig = (ii + i - x_orig_offset) * theta_rad_cos - A;
+//                                        float z_orig = (ii + i - x_orig_offset) * theta_rad_sin + B;
+//                                        if (fabs(x_orig - tmp1[ii]) > 1e-5) {
+//                                            printf("GG\n");
+//                                            printf("x_orig on %d %d %d\n", j, k, i + ii);
+//                                            printf("%.6f %.6f\n", x_orig, tmp1[ii]);
+//                                            exit(0);
+//                                        }
+//                                        if (fabs(z_orig - tmp2[ii]) > 1e-5) {
+//                                            printf("GG\n");
+//                                            printf("z_orig on %d %d %d\n", j, k, i + ii);
+//                                            printf("%.6f %.6f\n", z_orig, tmp2[ii]);
+//                                            exit(0);
+//                                        }
+//                                    }
+//                                }
 
                                 //int x1 = int(x_orig);
                                 __m512i x1 = _mm512_cvt_roundps_epi32(x_ori, _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
@@ -1321,39 +1321,39 @@ last cost 0.00014
                                 __m512 c1 = _mm512_mul_ps(coeff, cc1);
 
 
-                                if (checcc) {
-                                    float tmp1[16];
-                                    _mm512_store_ps(tmp1, c0);
-                                    float tmp2[16];
-                                    _mm512_store_ps(tmp2, c1);
-                                    for (int ii = 0; ii < 16; ii++) {
-                                        float x_orig = (i + ii - x_orig_offset) * theta_rad_cos - A;
-                                        float z_orig = (i + ii - x_orig_offset) * theta_rad_sin + B;
-                                        int x1 = int(x_orig);
-                                        int x2 = int(x_orig + 1 - eps);
-                                        float coeff = x_orig - x1;
-                                        int n_z = int((z_orig + C) / defocus_step);
-                                        // the num in the corrected stack for the current height
-
-                                        float ttr0 = (1 - coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x1];
-                                        float ttr1 = (coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x2];
-
-                                        if (fabs(ttr0 - tmp1[ii]) > 1e-5) {
-                                            printf("GG\n");
-                                            printf("c0 on %d %d %d\n", j, k, i + ii);
-                                            printf("%.6f %.6f\n", ttr0, tmp1[ii]);
-                                            exit(0);
-                                        }
-                                        if (fabs(ttr1 - tmp2[ii]) > 1e-5) {
-                                            printf("GG\n");
-                                            printf("c1 on %d %d %d\n", j, k, i + ii);
-                                            printf("%.6f %.6f\n", ttr1, tmp2[ii]);
-                                            exit(0);
-                                        }
-
-
-                                    }
-                                }
+//                                if (checcc) {
+//                                    float tmp1[16];
+//                                    _mm512_store_ps(tmp1, c0);
+//                                    float tmp2[16];
+//                                    _mm512_store_ps(tmp2, c1);
+//                                    for (int ii = 0; ii < 16; ii++) {
+//                                        float x_orig = (i + ii - x_orig_offset) * theta_rad_cos - A;
+//                                        float z_orig = (i + ii - x_orig_offset) * theta_rad_sin + B;
+//                                        int x1 = int(x_orig);
+//                                        int x2 = int(x_orig + 1 - eps);
+//                                        float coeff = x_orig - x1;
+//                                        int n_z = int((z_orig + C) / defocus_step);
+//                                        // the num in the corrected stack for the current height
+//
+//                                        float ttr0 = (1 - coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x1];
+//                                        float ttr1 = (coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x2];
+//
+//                                        if (fabs(ttr0 - tmp1[ii]) > 1e-5) {
+//                                            printf("GG\n");
+//                                            printf("c0 on %d %d %d\n", j, k, i + ii);
+//                                            printf("%.6f %.6f\n", ttr0, tmp1[ii]);
+//                                            exit(0);
+//                                        }
+//                                        if (fabs(ttr1 - tmp2[ii]) > 1e-5) {
+//                                            printf("GG\n");
+//                                            printf("c1 on %d %d %d\n", j, k, i + ii);
+//                                            printf("%.6f %.6f\n", ttr1, tmp2[ii]);
+//                                            exit(0);
+//                                        }
+//
+//
+//                                    }
+//                                }
 
 //                                if (cnt <= 10) {
 //                                    float tmp[16];
