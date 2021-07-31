@@ -29,7 +29,7 @@
 
 const int threadNumber = 64;
 
-const double eps = 1e-7;
+const float eps = 1e-7;
 
 
 double GetTime() {
@@ -738,12 +738,22 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
                     // write all corrected and weighted images in one mrc stack
                     cout << "\tPerform 3D correction & save corrected stack:" << endl;
-                    float *stack_corrected[int(h_tilt_max / defocus_step) + 1]; // 第一维遍历不同高度，第二维x，第三维y
+                    t2 = GetTime();
+
+                    int Nx = stack_orig.getNx();
+                    int Ny = stack_orig.getNy();
+                    int Nx2 = Nx + 2 - Nx % 2;
+                    int Nxh = Nx / 2 + 1;
+                    int Nyh = Ny / 2 + 1;
+                    int Nyh2 = (Ny + 1) / 2;
+//                    float *stack_corrected[int(h_tilt_max / defocus_step) + 1]; // 第一维遍历不同高度，第二维x，第三维y
+
+
+                    float *stack_corrected = new float[(int(h_tilt_max / defocus_step) + 1) * Nx2 * Ny];
                     int n_zz = 0;
                     fftwf_plan_with_nthreads(4);
 
 
-                    t2 = GetTime();
                     // weighting
                     if (!skip_weighting) {
                         cout << "\tStart weighting..." << endl;
@@ -761,8 +771,6 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     cout << "\tStart 3D-CTF correction..." << endl;
                     t2 = GetTime();
 
-                    int Nx = stack_orig.getNx();
-                    int Ny = stack_orig.getNy();
 
                     //把第一波fft操作拿出来，预处理好放到bufc_pre中
                     float *image_pre;
@@ -785,10 +793,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     }
                     int zl = -int(h_tilt_max / 2);
                     int zr = int(h_tilt_max / 2);
-                    int Nx2 = Nx + 2 - Nx % 2;
-                    int Nxh = Nx / 2 + 1;
-                    int Nyh = Ny / 2 + 1;
-                    int Nyh2 = (Ny + 1) / 2;
+
 
                     double a_w_cos = acos(w_cos);
 
@@ -826,8 +831,8 @@ last cost 0.00014
                         int thread_id = omp_get_thread_num();
 
                         int n_z = (zz + int(h_tilt_max / 2)) / defocus_step;
-                        stack_corrected[n_z] = new float[Nx2 * Ny];
-                        float *image = stack_corrected[n_z];
+//                        stack_corrected[n_z] = new float[Nx2 * Ny];
+                        float *image = stack_corrected + n_z * Nx2 * Ny;
                         CTF ctf = ctf_para[n];
                         float z_offset = float(zz) + float(defocus_step - 1) / 2;
                         memcpy(image, bufc_pre, sizeof(float) * (Nx2 * Ny));
@@ -1026,8 +1031,8 @@ last cost 0.00014
                                 int n_z = int((z_orig + C) / defocus_step);
                                 // the num in the corrected stack for the current height
                                 stack_recon[j][i + k * Nx] +=
-                                        (1 - coeff) * stack_corrected[n_z][j * Nx2 + x1] +
-                                        (coeff) * stack_corrected[n_z][j * Nx2 + x2];
+                                        (1 - coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x1] +
+                                        (coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x2];
                             }
                         }
                     }
@@ -1037,9 +1042,10 @@ last cost 0.00014
                     cout << "\tDone" << endl;
 
                     t2 = GetTime();
-                    for (int n_z = 0; n_z < n_zz; n_z++) {
-                        delete[] stack_corrected[n_z];
-                    }
+//                    for (int n_z = 0; n_z < n_zz; n_z++) {
+//                        delete[] stack_corrected[n_z];
+//                    }
+                    delete stack_corrected;
                     t3 = GetTime();
                     cost3 += t3 - t2;
                 }
