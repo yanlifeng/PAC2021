@@ -25,9 +25,11 @@
 
 #include "omp.h"
 
+#include <immintrin.h>
+
 #define mycos(x) (1-x*x/2+x*x*x*x/24)
 
-const int threadNumber = 64;
+const int threadNumber = 1;
 
 const float eps = 1e-7;
 
@@ -738,6 +740,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
                     // write all corrected and weighted images in one mrc stack
                     cout << "\tPerform 3D correction & save corrected stack:" << endl;
+
                     t2 = GetTime();
 
                     int Nx = stack_orig.getNx();
@@ -750,6 +753,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
 
                     float *stack_corrected = new float[(int(h_tilt_max / defocus_step) + 1) * Nx2 * Ny];
+
+
                     int n_zz = 0;
                     fftwf_plan_with_nthreads(4);
 
@@ -770,7 +775,6 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     //hotspot 1
                     cout << "\tStart 3D-CTF correction..." << endl;
                     t2 = GetTime();
-
 
                     //把第一波fft操作拿出来，预处理好放到bufc_pre中
                     float *image_pre;
@@ -793,7 +797,6 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     }
                     int zl = -int(h_tilt_max / 2);
                     int zr = int(h_tilt_max / 2);
-
 
                     double a_w_cos = acos(w_cos);
 
@@ -1021,7 +1024,423 @@ last cost 0.00014
                             double B = (k - z_orig_offset) * theta_rad_cos + z_orig_offset;
                             float C = -z_orig_offset + int(h_tilt_max / 2);
 
-                            for (int i = li; i <= ri; i++)   // loop for the xz-plane to perform BP
+                            int i = li;
+                            __m512d a_con = _mm512_set1_pd(A);
+                            __m512d b_con = _mm512_set1_pd(B);
+                            __m512d cos_con = _mm512_set1_pd(theta_rad_cos);
+                            __m512d sin_con = _mm512_set1_pd(theta_rad_sin);
+                            __m512 offset_con = _mm512_set1_ps(x_orig_offset);
+                            __m512 eps_con = _mm512_set1_ps(1 - eps);
+                            __m512 c_con = _mm512_set1_ps(C);
+                            __m512 d_step_con = _mm512_set1_ps(1.0 / defocus_step);
+                            __m512i idx = _mm512_set_epi32(li + 15, li + 14, li + 13, li + 12, li + 11, li + 10, li + 9,
+                                                           li + 8, li + 7, li + 6, li + 5, li + 4, li + 3, li + 2,
+                                                           li + 1, li + 0);
+                            __m512i nxy_con = _mm512_set1_epi32(Nx2 * Ny);
+                            __m512i nx2_con = _mm512_set1_epi32(Nx2);
+                            __m512i j_con = _mm512_set1_epi32(j);
+                            __m512i si_con = _mm512_set1_epi32(16);
+
+                            __m512 one_con = _mm512_set1_ps(1);
+
+                            static int cnt = 100;
+                            bool checcc = 0;
+                            for (; i + 16 <= ri + 1; i += 16) {
+
+
+
+                                //float x_orig = (i - x_orig_offset) * theta_rad_cos - A;
+                                //float z_orig = (i - x_orig_offset) * theta_rad_sin + B;
+
+                                if (cnt <= 10) {
+                                    int tmp[16];
+                                    _mm512_store_epi32(tmp, idx);
+                                    cout << "idx cal:" << endl;
+                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
+                                    cout << endl;
+                                    cout << "idx std:" << endl;
+                                    for (int ii = 0; ii < 16; ii++)printf("%d ", i + ii);
+                                    cout << endl;
+                                }
+
+//                                cnt++;
+                                //i - x_orig_offset
+                                __m512 sub_tmp = _mm512_sub_ps(_mm512_cvtepi32_ps(idx), offset_con);
+
+                                if (cnt <= 10) {
+                                    float tmp[16];
+                                    _mm512_store_ps(tmp, sub_tmp);
+                                    cout << "sub_tmp cal:" << endl;
+                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
+                                    cout << endl;
+                                    cout << "sub_tmp std:" << endl;
+                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", i + ii - x_orig_offset);
+                                    cout << endl;
+                                }
+
+                                //select pre 8 float to f0, last 8 to f1
+                                __m256 f0 = _mm512_extractf32x8_ps(sub_tmp, 0);
+                                __m256 f1 = _mm512_extractf32x8_ps(sub_tmp, 1);
+                                __m512d d0 = _mm512_cvtps_pd(f0);
+                                __m512d d1 = _mm512_cvtps_pd(f1);
+//                                if (cnt <= 10) {
+//                                    double tmp[8];
+//                                    _mm512_store_pd(tmp, d0);
+//                                    cout << "d0 cal:" << endl;
+//                                    for (int ii = 0; ii < 8; ii++)printf("%.3f ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "d0 std:" << endl;
+//                                    for (int ii = 0; ii < 8; ii++)printf("%.3f ", i + ii - x_orig_offset);
+//                                    cout << endl;
+//
+//                                    _mm512_store_pd(tmp, d1);
+//                                    cout << "d1 cal:" << endl;
+//                                    for (int ii = 0; ii < 8; ii++)printf("%.3f ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "d1 std:" << endl;
+//                                    for (int ii = 0; ii < 8; ii++)printf("%.3f ", i + ii + 8 - x_orig_offset);
+//                                    cout << endl;
+//                                }
+                                // sub_tmp * theta_rad_cos - A
+                                __m512d x_tmp0 = _mm512_sub_pd(_mm512_mul_pd(d0, cos_con), a_con);
+                                __m512d x_tmp1 = _mm512_sub_pd(_mm512_mul_pd(d1, cos_con), a_con);
+//                                if (cnt <= 10) {
+//                                    double tmp[8];
+//                                    _mm512_store_pd(tmp, x_tmp0);
+//                                    cout << "x_tmp0 cal:" << endl;
+//                                    for (int ii = 0; ii < 8; ii++)printf("%.3f ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "x_tmp0 std:" << endl;
+//                                    for (int ii = 0; ii < 8; ii++)
+//                                        printf("%.3f ", (i + ii - x_orig_offset) * theta_rad_cos - A);
+//                                    cout << endl;
+//                                    _mm512_store_pd(tmp, x_tmp1);
+//                                    cout << "x_tmp1 cal:" << endl;
+//                                    for (int ii = 0; ii < 8; ii++)printf("%.3f ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "x_tmp1 std:" << endl;
+//                                    for (int ii = 0; ii < 8; ii++)
+//                                        printf("%.3f ", (i + ii + 8 - x_orig_offset) * theta_rad_cos - A);
+//                                    cout << endl;
+//                                }
+                                //merge 8+8 double to 16 float
+                                __m512 x_ori;
+                                x_ori = _mm512_insertf32x8(x_ori, _mm512_cvtpd_ps(x_tmp0), 0);
+                                x_ori = _mm512_insertf32x8(x_ori, _mm512_cvtpd_ps(x_tmp1), 1);
+
+//                                if (cnt <= 10) {
+//                                    float tmp[16];
+//                                    _mm512_store_ps(tmp, x_ori);
+//                                    cout << "x_ori cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "x_ori std:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)
+//                                        printf("%.3f ", (i + ii - x_orig_offset) * theta_rad_cos - A);
+//                                    cout << endl;
+//                                }
+
+                                // sub_tmp * theta_rad_sin + B
+                                __m512d z_tmp0 = _mm512_add_pd(_mm512_mul_pd(d0, sin_con), b_con);
+                                __m512d z_tmp1 = _mm512_add_pd(_mm512_mul_pd(d1, sin_con), b_con);
+                                //merge 8+8 double to 16 float
+                                __m512 z_ori;
+                                z_ori = _mm512_insertf32x8(z_ori, _mm512_cvtpd_ps(z_tmp0), 0);
+                                z_ori = _mm512_insertf32x8(z_ori, _mm512_cvtpd_ps(z_tmp1), 1);
+//                                if (cnt <= 10) {
+//                                    float tmp[16];
+//                                    _mm512_store_ps(tmp, z_ori);
+//                                    cout << "z_ori cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "z_ori std:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)
+//                                        printf("%.3f ", (i + ii - x_orig_offset) * theta_rad_sin + B);
+//                                    cout << endl;
+//                                }
+                                if (checcc) {
+                                    float tmp1[16];
+                                    _mm512_store_ps(tmp1, x_ori);
+                                    float tmp2[16];
+                                    _mm512_store_ps(tmp2, z_ori);
+                                    for (int ii = 0; ii < 16; ii++) {
+                                        float x_orig = (ii + i - x_orig_offset) * theta_rad_cos - A;
+                                        float z_orig = (ii + i - x_orig_offset) * theta_rad_sin + B;
+                                        if (fabs(x_orig - tmp1[ii]) > 1e-5) {
+                                            printf("GG\n");
+                                            printf("x_orig on %d %d %d\n", j, k, i + ii);
+                                            printf("%.6f %.6f\n", x_orig, tmp1[ii]);
+                                            exit(0);
+                                        }
+                                        if (fabs(z_orig - tmp2[ii]) > 1e-5) {
+                                            printf("GG\n");
+                                            printf("z_orig on %d %d %d\n", j, k, i + ii);
+                                            printf("%.6f %.6f\n", z_orig, tmp2[ii]);
+                                            exit(0);
+                                        }
+                                    }
+                                }
+
+                                //int x1 = int(x_orig);
+                                __m512i x1 = _mm512_cvt_roundps_epi32(x_ori, _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
+//                                if (cnt <= 10) {
+//                                    int tmp[16];
+//                                    _mm512_store_epi32(tmp, x1);
+//                                    cout << "x1 cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "x1 std:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)
+//                                        printf("%d ", int((i + ii - x_orig_offset) * theta_rad_cos - A));
+//                                    cout << endl;
+//                                }
+
+                                //int x2 = int(x_orig + 1 - eps);
+                                __m512i x2 = _mm512_cvt_roundps_epi32(_mm512_add_ps(x_ori, eps_con),
+                                                                      _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
+
+//                                if (cnt <= 10) {
+//                                    int tmp[16];
+//                                    _mm512_store_epi32(tmp, x2);
+//                                    cout << "x2 cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "x2 std:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)
+//                                        printf("%d ", int((i + ii - x_orig_offset) * theta_rad_cos - A + 1 - eps));
+//                                    cout << endl;
+//                                }
+
+                                //float coeff = x_orig - x1;
+                                __m512 coeff = _mm512_sub_ps(x_ori, _mm512_cvtepi32_ps(x1));
+
+                                //int n_z = int((z_orig + C) / defocus_step);
+                                //TODO change div to mul
+                                __m512 nz_tmp = _mm512_mul_ps(_mm512_add_ps(z_ori, c_con), d_step_con);
+
+//                                if (cnt <= 10) {
+//                                    float tmp[16];
+//                                    _mm512_store_ps(tmp, nz_tmp);
+//                                    cout << "nz_tmp cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "nz_tmp std:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)
+//                                        printf("%.3f ",
+//                                               (((i + ii - x_orig_offset) * theta_rad_sin + B + C) / defocus_step));
+//                                    cout << endl;
+//                                }
+                                __m512i n_z = _mm512_cvt_roundps_epi32(nz_tmp,
+                                                                       _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
+
+
+//                                if (cnt <= 10) {
+//                                    int tmp[16];
+//                                    _mm512_store_epi32(tmp, n_z);
+//                                    cout << "n_z cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "n_z std:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)
+//                                        printf("%d ",
+//                                               int(((i + ii - x_orig_offset) * theta_rad_sin + B + C) / defocus_step));
+//                                    cout << endl;
+//                                }
+
+                                //cal  n_z * Nx2 * Ny + j * Nx2
+                                __m512i tt0 = _mm512_mullo_epi32(n_z, nxy_con);
+                                __m512i tt1 = _mm512_mullo_epi32(j_con, nx2_con);
+//                                if (cnt <= 10) {
+//                                    int tmp[16];
+//                                    _mm512_store_epi32(tmp, n_z);
+//                                    cout << "n_z cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
+//                                    cout << endl;
+//                                    _mm512_store_epi32(tmp, nxy_con);
+//                                    cout << "nxy_con cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
+//                                    cout << endl;
+//
+//                                    _mm512_store_epi32(tmp, tt0);
+//                                    cout << "tt0 cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
+//                                    cout << endl;
+//                                }
+
+
+                                __m512i ids_base = _mm512_add_epi32(tt0, tt1);
+
+//                                if (cnt <= 10) {
+//                                    int tmp[16];
+//                                    _mm512_store_epi32(tmp, ids_base);
+//                                    cout << "ids_base cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
+//                                    cout << endl;
+//                                    int nz_id[16];
+//                                    _mm512_store_epi32(nz_id, n_z);
+//
+//                                    cout << "ids_base std:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)
+//                                        printf("%d ", nz_id[ii] * Nx2 * Ny + j * Nx2);
+//                                    cout << endl;
+//                                }
+
+                                //cal  n_z * Nx2 * Ny + j * Nx2 + x1
+                                __m512i ids1 = _mm512_add_epi32(ids_base, x1);
+                                //cal  n_z * Nx2 * Ny + j * Nx2 + x2
+                                __m512i ids2 = _mm512_add_epi32(ids_base, x2);
+
+//                                if (cnt <= 10) {
+//                                    int tmp[16];
+//                                    _mm512_store_epi32(tmp, ids1);
+//                                    cout << "ids1 cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
+//                                    cout << endl;
+//                                    int base_id[16];
+//                                    _mm512_store_epi32(base_id, ids_base);
+//                                    int x1_id[16];
+//                                    _mm512_store_epi32(x1_id, x1);
+//                                    cout << "ids1 std:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)
+//                                        printf("%d ", base_id[ii] + x1_id[ii]);
+//                                    cout << endl;
+//                                }
+
+
+                                __m512 cc0 = _mm512_i32gather_ps(ids1, stack_corrected, 4);
+
+                                __m512 cc1 = _mm512_i32gather_ps(ids2, stack_corrected, 4);
+
+//                                cout << "111" << endl;
+
+                                //(1 - coeff) * stack_corrected[n_z][j * Nx2 + x1]
+                                __m512 c0 = _mm512_mul_ps(_mm512_sub_ps(one_con, coeff), cc0);
+
+
+                                //(coeff) * stack_corrected[n_z][j * Nx2 + x2]
+                                __m512 c1 = _mm512_mul_ps(coeff, cc1);
+
+
+                                if (checcc) {
+                                    float tmp1[16];
+                                    _mm512_store_ps(tmp1, c0);
+                                    float tmp2[16];
+                                    _mm512_store_ps(tmp2, c1);
+                                    for (int ii = 0; ii < 16; ii++) {
+                                        float x_orig = (i + ii - x_orig_offset) * theta_rad_cos - A;
+                                        float z_orig = (i + ii - x_orig_offset) * theta_rad_sin + B;
+                                        int x1 = int(x_orig);
+                                        int x2 = int(x_orig + 1 - eps);
+                                        float coeff = x_orig - x1;
+                                        int n_z = int((z_orig + C) / defocus_step);
+                                        // the num in the corrected stack for the current height
+
+                                        float ttr0 = (1 - coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x1];
+                                        float ttr1 = (coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x2];
+
+                                        if (fabs(ttr0 - tmp1[ii]) > 1e-5) {
+                                            printf("GG\n");
+                                            printf("c0 on %d %d %d\n", j, k, i + ii);
+                                            printf("%.6f %.6f\n", ttr0, tmp1[ii]);
+                                            exit(0);
+                                        }
+                                        if (fabs(ttr1 - tmp2[ii]) > 1e-5) {
+                                            printf("GG\n");
+                                            printf("c1 on %d %d %d\n", j, k, i + ii);
+                                            printf("%.6f %.6f\n", ttr1, tmp2[ii]);
+                                            exit(0);
+                                        }
+
+
+                                    }
+                                }
+
+//                                if (cnt <= 10) {
+//                                    float tmp[16];
+//                                    _mm512_store_ps(tmp, c0);
+//                                    cout << "c0 cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "c0 std:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++) {
+//                                        int idd = i + ii;
+//                                        float x_orig = (idd - x_orig_offset) * theta_rad_cos - A;
+//                                        float z_orig = (idd - x_orig_offset) * theta_rad_sin + B;
+//                                        int x1 = int(x_orig);
+//                                        int x2 = int(x_orig + 1 - eps);
+//                                        float coeff = x_orig - x1;
+//                                        int n_z = int((z_orig + C) / defocus_step);
+//                                        float tttx = (1 - coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x1];
+//                                        printf("%.3f ", tttx);
+//                                    }
+//                                    cout << endl;
+//                                    _mm512_store_ps(tmp, c1);
+//                                    cout << "c1 cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "c1 std:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++) {
+//                                        int idd = i + ii;
+//                                        float x_orig = (idd - x_orig_offset) * theta_rad_cos - A;
+//                                        float z_orig = (idd - x_orig_offset) * theta_rad_sin + B;
+//                                        int x1 = int(x_orig);
+//                                        int x2 = int(x_orig + 1 - eps);
+//                                        float coeff = x_orig - x1;
+//                                        int n_z = int((z_orig + C) / defocus_step);
+//                                        float tttx = (coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x2];
+//                                        printf("%.3f ", tttx);
+//                                    }
+//                                    cout << endl;
+//                                }
+
+//                                cout << "222" << endl;
+
+
+                                float *p_now = stack_recon[j] + k * Nx + i;
+                                __m512 tmplod = _mm512_load_ps(p_now);
+//                                if (cnt <= 10) {
+//                                    float tmp[16];
+//                                    _mm512_store_ps(tmp, tmplod);
+//                                    cout << "tmplod cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "tmplod std:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++) {
+//                                        int idd = i + ii;
+//                                        printf("%.3f ", stack_recon[j][idd + k * Nx]);
+//                                    }
+//                                    cout << endl;
+//                                }
+                                //last baba
+                                __m512 resss = _mm512_add_ps(_mm512_add_ps(c0, c1), tmplod);
+                                _mm512_store_ps(p_now, resss);
+
+//                                if (cnt <= 10) {
+//                                    __m512 rechr = _mm512_load_ps(p_now);
+//                                    float tmp[16];
+//                                    _mm512_store_ps(tmp, rechr);
+//                                    cout << "rechr cal:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
+//                                    cout << endl;
+//                                    cout << "c0 std:" << endl;
+//                                    for (int ii = 0; ii < 16; ii++) {
+//                                        int idd = i + ii;
+//                                        printf("%.3f ", 0);
+//                                    }
+//                                    cout << endl;
+//                                }
+
+                                idx = _mm512_add_epi32(idx, si_con);
+
+//                                exit(0);
+//                                cout << "333" << endl;
+
+                                // the num in the corrected stack for the current height
+//                                stack_recon[j][i + k * Nx] +=
+//                                        (1 - coeff) * stack_corrected[n_z][j * Nx2 + x1] +
+//                                        (coeff) * stack_corrected[n_z][j * Nx2 + x2];
+                            }
+                            for (; i <= ri; i++)   // loop for the xz-plane to perform BP
                             {
                                 float x_orig = (i - x_orig_offset) * theta_rad_cos - A;
                                 float z_orig = (i - x_orig_offset) * theta_rad_sin + B;
@@ -1034,6 +1453,7 @@ last cost 0.00014
                                         (1 - coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x1] +
                                         (coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x2];
                             }
+
                         }
                     }
                     t3 = GetTime();
@@ -1042,10 +1462,8 @@ last cost 0.00014
                     cout << "\tDone" << endl;
 
                     t2 = GetTime();
-//                    for (int n_z = 0; n_z < n_zz; n_z++) {
-//                        delete[] stack_corrected[n_z];
-//                    }
                     delete stack_corrected;
+
                     t3 = GetTime();
                     cost3 += t3 - t2;
                 }
