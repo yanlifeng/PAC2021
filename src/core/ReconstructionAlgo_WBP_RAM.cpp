@@ -169,7 +169,7 @@ static void filter_weighting_1D_many(float *data, int Nx, int Ny, float radial, 
 
     fftwf_execute(plan_ifft);
     fft2buf_padding_1D(data, bufc, Nx, Nx_final, Ny, Ny);
-#pragma omp simd parallel for
+#pragma omp parallel for
     for (int i = 0; i < Nx * Ny; i++)   // normalization
     {
         data[i] /= Nx;
@@ -640,6 +640,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
     int Nxc = Nx + 2 - Nx % 2;
     int filter_weighting_1D_many_all = 0 ;
     int ctf_correction_all = 0;
+    int recon_now_all = 0;
     // Reconstruction
     cout << endl << "Reconstruction with (W)BP in RAM:" << endl << endl;
     if (!unrotated_stack)    // input rotated stack (y-axis as tilt axis)
@@ -664,6 +665,9 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         TSTART(n_stack_orig_getNz)
         float *stack_corrected[int(h_tilt_max / defocus_step) + 1]; // 第一维遍历不同高度，第二维x，第三维y
         for (int i=0;i<(int(h_tilt_max / defocus_step) + 1);i++) stack_corrected[i] = new float[Nxc*Ny];
+
+        fftwf_init_threads();
+
         for (int n = 0; n < Nz; n++)   // loop for every micrograph
         {
             TDEF(Image)
@@ -807,13 +811,20 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     cout << "\tPerform 3D correction & save corrected stack:" << endl;
 
                     int n_zz = 0;
-
                     TDEF(filter_weighting_1D_many)
                     TSTART(filter_weighting_1D_many)
+                    /*  fftw线程数     运行时间（s）
+                     *      1           7.06
+                     *      2           7.01
+                     *      4           6.39
+                     *      8           6.27
+                     *      16及以上线程会导致出粗
+                     */
                     // weighting
+                    fftwf_plan_with_nthreads(4);
                     if (!skip_weighting) {
                         cout << "\tStart weighting..." << endl;
-                        fftwf_plan_with_nthreads(1);
+
                         filter_weighting_1D_many(image_now, Nx, Ny, weighting_radial,
                                                  weighting_sigma);
                         cout << "\tDone" << endl;
@@ -849,6 +860,9 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     float phase_shift =  ctf_para[n].getPhaseShift();
                     float w_sin =  ctf_para[n].getWSin();
                     float w_cos =  ctf_para[n].getWCos();
+                    float A = sqrt(w_sin*w_sin+w_cos*w_cos);
+                    float B = atan(w_cos/w_sin);
+                    float phase_shift_B = B + phase_shift;
                     float pix =  ctf_para[n].getPixelSize();
                     float Cs =  ctf_para[n].getCs();
                     float x_real_l = 1.0 / (Nx * pix);
@@ -859,9 +873,13 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                          zz < zz_r; zz += defocus_step)    // loop over every height (correct with different defocus)
                     {
                         int n_z = (zz + zz_r) / defocus_step;
-
                         memcpy(stack_corrected[n_z],bufc,Nxc * Ny*sizeof(float));
-
+                        fftwf_plan plan_ifft;
+#pragma omp critical
+                        {
+                            plan_ifft = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(stack_corrected[n_z]), (float *) stack_corrected[n_z],
+                                                              FFTW_ESTIMATE);
+                        }
 //                        ctf_correction_perbufc(Nx, Ny, defocus1,defocus2,astig,lambda,phase_shift,w_sin,w_cos,pix,Cs,
 //                                               flip_contrast, float(zz) + float(defocus_step - 1) / 2,stack_corrected[n_z]);
                         float z_offset = float(zz) + float(defocus_step - 1) * 0.5;
@@ -888,9 +906,13 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 float df_now =
                                          ((defocus1 + defocus2 - 2 * z_offset * pix) +
                                          (defocus1 - defocus2) * cos(2 * (alpha - astig))) * 0.5;
+//                                float chi = M_PI * lambda * df_now * freq2 -
+//                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
                                 float chi = M_PI * lambda * df_now * freq2 -
-                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
-                                ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
+                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift_B;
+//                                ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
+//                                ctf_now = A*sin(chi);
+                                ctf_now = sin(chi);
                                 if (flip_contrast) {
                                     ctf_now = -ctf_now;
                                 }
@@ -898,51 +920,57 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 stack_corrected[n_z][j * Nxc] *= ctf_now;
                                 stack_corrected[n_z][1 + j * Nxc] *= ctf_now;
                             }
+#pragma omp simd
                             for (int i = 2; i < Nxc; i += 2) {
                                 //float ctf_now = ctf.computeCTF2D(i / 2, j, Nx, Ny, true, flip_contrast, z_offset);
                                 float ctf_now;
-                                {
-//                                    float x = i / 2;
-//                                    float x_norm = (x >= int((float(Nx + 2) / 2))) ? (x - Nx) : (x);
-                                    float x_norm = i / 2;
-//                                    float x_real = float(x_norm) / float(Nx) * (1 / pix);
-                                    float x_real = float(x_norm) * x_real_l;
-                                    float alpha = atan(y_real / x_real);
-                                    float freq2 = x_real * x_real + y_real_2;
-                                    float df_now =
-                                            ((defocus1 + defocus2 - 2 * z_offset * pix) +
-                                             (defocus1 - defocus2) * cos(2 * (alpha - astig))) * 0.5;
-                                    float chi = M_PI * lambda * df_now * freq2 -
-                                                M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
-                                    ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
-                                    if (flip_contrast) {
-                                        ctf_now = -ctf_now;
-                                    }
-                                    ctf_now = 1-(int)(((*((unsigned int*)&ctf_now)) >> 31) << 1);
+//                              float x = i / 2;
+//                              float x_norm = (x >= int((float(Nx + 2) / 2))) ? (x - Nx) : (x);
+                                float x_norm = i * 0.5;
+//                              float x_real = float(x_norm) / float(Nx) * (1 / pix);
+                                float x_real = float(x_norm) * x_real_l;
+                                float alpha = atan(y_real / x_real);
+                                float freq2 = x_real * x_real + y_real_2;
+                                float df_now =
+                                        ((defocus1 + defocus2 - 2 * z_offset * pix) +
+                                         (defocus1 - defocus2) * cos(2 * (alpha - astig))) * 0.5;
+//                              float chi = M_PI * lambda * df_now * freq2 -
+//                                                M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
+                                float chi = M_PI * lambda * df_now * freq2 -
+                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift_B;
+//                              ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
+//                              ctf_now = A*sin(chi);
+                                ctf_now = sin(chi);
+                                if (flip_contrast) {
+                                    ctf_now = -ctf_now;
                                 }
+                                ctf_now = 1-(int)(((*((unsigned int*)&ctf_now)) >> 31) << 1);
                                 stack_corrected[n_z][i + j * Nxc] *= ctf_now;
                                 stack_corrected[n_z][(i + 1) + j * Nxc] *= ctf_now;
                             }
                         }
-                        fftwf_plan plan_ifft;
-#pragma omp critical
-                        {
-                            plan_ifft = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(stack_corrected[n_z]), (float *) stack_corrected[n_z],
-                                                              FFTW_ESTIMATE);
-                        }
+
                         fftwf_execute(plan_ifft);
                         //  fft2buf(image, bufc, Nx, Ny);
-#pragma omp simd
-                        for (int i = 0; i < Nxc * Ny; i++)   // normalization
-                        {
-                            stack_corrected[n_z][i] = stack_corrected[n_z][i] / (Nx * Ny);
-                        }
+//#pragma omp simd
+//                        for (int i = 0; i < Nxc * Ny; i++)   // normalization
+//                        {
+//                            stack_corrected[n_z][i] = stack_corrected[n_z][i] / (Nx * Ny);
+//                        }
 #pragma omp critical
                         {
                             fftwf_destroy_plan(plan_ifft);
                         }
                     }
                     n_zz += ((zz_r-zz_l-1)/defocus_step+1);
+#pragma omp parallel for
+                    for (int n_z=0;n_z<n_zz;n_z++){
+#pragma omp simd
+                        for (int i = 0; i < Nxc * Ny; i++)   // normalization
+                        {
+                            stack_corrected[n_z][i] = stack_corrected[n_z][i] / (Nx * Ny);
+                        }
+                    }
                     delete [] bufc;
                     fftwf_destroy_plan(plan_fft);
                     TEND(ctf_correction)
@@ -990,8 +1018,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 float z_orig = (float(i) - x_orig_offset) * sin_theta_rad + (float(k) - z_orig_offset) * cos_theta_rad + z_orig_offset;
                                 int x_orig_l = floor(x_orig);
                                 int x_orig_r = ceil(x_orig);
-                                int n_z = (int)((z_orig - z_orig_offset + int(h_tilt_max / 2) ) /
-                                                defocus_step);    // the num in the corrected stack for the current height
+                                int n_z = (int)((z_orig - z_orig_offset + int(h_tilt_max / 2) ) / defocus_step);    // the num in the corrected stack for the current height
                                 // 上面这行代码一动就精度大问题 例如 int(h_tilt_max / 2) -> zz_r
                                 float coeff = x_orig - x_orig_l;
                                 stack_recon[j][i + k * Nx] += (1 - coeff) * stack_corrected[n_z][j * Nxc + x_orig_l] + (coeff)*stack_corrected[n_z][j*Nxc + x_orig_r];
@@ -1000,7 +1027,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     }
                     TEND(recon_now)
                     TPRINT(recon_now, "recon_now time is")
-
+                    recon_now_all += TINT(recon_now);
 
                     cout << "\tDone" << endl;
 
@@ -1016,6 +1043,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         }
         TEND(n_stack_orig_getNz)
         TPRINT(n_stack_orig_getNz,"n_stack_orig_getNz is ");
+
         // write out final result
         cout << "Wrtie out final reconstruction result:" << endl;
         MRC stack_final(output_mrc.c_str(), "wb");
@@ -1080,6 +1108,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
     printf("\t\tfilter weighting 1D many all time is %f s\n",(float)filter_weighting_1D_many_all/1e6);
     printf("\t\tctf correction all time is %f s\n",(float)ctf_correction_all/1e6);
+    printf("\t\trecon now all time is %f s\n",(float)recon_now_all/1e6);
 
 
 }
