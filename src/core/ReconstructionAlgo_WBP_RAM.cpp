@@ -22,6 +22,9 @@
 #include "util.h"
 #include <omp.h>
 #include <chrono>
+
+#include <immintrin.h>
+
 typedef std::chrono::high_resolution_clock Clock;
 #define TDEF(x_) chrono::high_resolution_clock::time_point x_##_t0, x_##_t1;
 #define TSTART(x_) x_##_t0 = Clock::now();
@@ -650,7 +653,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         float *stack_recon[Ny]; // (x,z,y)
         for (int j = 0; j < Ny; j++) {
             stack_recon[j] = new float[Nx * h];
-#pragma omp simd parallel for
+#pragma omp parallel for
             for (int i = 0; i < Nx * h; i++) {
                 stack_recon[j][i] = 0.0;
             }
@@ -880,6 +883,9 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     float pix =  ctf_para[n].getPixelSize();
                     float Cs =  ctf_para[n].getCs();
                     float x_real_l = 1.0 / (Nx * pix);
+                    float chi_A = M_PI * lambda;
+                    float chi_B = M_PI_2 * Cs * lambda * lambda * lambda;
+                    float df_now_B = (defocus1 - defocus2)*0.5;
                     n_zz += ((zz_r-zz_l-1)/defocus_step+1);
                     fftwf_plan *plan_ifft =  new fftwf_plan[n_zz];
                     for (int n_z=0;n_z<n_zz;n_z++) {
@@ -906,6 +912,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //                        ctf_correction_perbufc(Nx, Ny, defocus1,defocus2,astig,lambda,phase_shift,w_sin,w_cos,pix,Cs,
 //                                               flip_contrast, float(zz) + float(defocus_step - 1) / 2,stack_corrected[n_z]);
                         float z_offset = float(zz) + float(defocus_step - 1) * 0.5;
+                        float df_now_A = (defocus1 + defocus2 - 2 * z_offset * pix) * 0.5;
                         for (int j = 0; j < Ny; j++) {
                             // loop: Nx+2-Nx%2 (all Fourier components for x-axis)
                             float y=j;
@@ -925,13 +932,13 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                     alpha = 0.0;
                                 }
                                 float freq2 = y_real * y_real;
-                                float df_now =
-                                         ((defocus1 + defocus2 - 2 * z_offset * pix) +
-                                         (defocus1 - defocus2) * cos(2 * (alpha - astig))) * 0.5;
+                                float df_now = df_now_A + df_now_B * cos(2 * (alpha - astig));
 //                                float chi = M_PI * lambda * df_now * freq2 -
 //                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
-                                float chi = M_PI * lambda * df_now * freq2 -
-                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift_B;
+//                                float chi = M_PI * lambda * df_now * freq2 -
+//                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift_B;
+                                float chi = chi_A * df_now * freq2 -
+                                            chi_B * freq2 * freq2 + phase_shift_B;
 //                                ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
 //                                ctf_now = A*sin(chi);
                                 ctf_now = sin(chi);
@@ -953,21 +960,11 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                             for (int i = 1; i < Nxc/2; i ++) {
                                 //float ctf_now = ctf.computeCTF2D(i / 2, j, Nx, Ny, true, flip_contrast, z_offset);
                                 float ctf_now;
-//                              float x = i / 2;
-//                              float x_norm = (x >= int((float(Nx + 2) / 2))) ? (x - Nx) : (x);
-//                                float x_norm = i;
-//                              float x_real = float(x_norm) / float(Nx) * (1 / pix);
-                                float x_real = float(i) * x_real_l;
-//                                float alpha = atan(y_real / x_real);
-                                float alpha = atan_pre[i+j*(Nx/2)];
+                                float x_real = x_real_l * i;
+                                float alpha_astig = 2* (atan_pre[i+j*(Nx/2)] - astig);
                                 float freq2 = x_real * x_real + y_real*y_real;
-                                float df_now =
-                                        ((defocus1 + defocus2 - 2 * z_offset * pix) +
-                                         (defocus1 - defocus2) * cos(2 * (alpha - astig))) * 0.5;
-//                              float chi = M_PI * lambda * df_now * freq2 -
-//                                                M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift;
-                                float chi = M_PI * lambda * df_now * freq2 -
-                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2 + phase_shift_B;
+                                float df_now = df_now_A + df_now_B * cos(alpha_astig);
+                                float chi = chi_A * df_now * freq2 - chi_B * freq2 * freq2 + phase_shift_B;
 //                              ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
 //                              ctf_now = A*sin(chi);
                                 ctf_now = sin(chi);
@@ -982,8 +979,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                     stack_corrected[n_z][(i*2 + 1) + j * Nxc] *= -1;
                                 }
 //                                ctf_now = 1-(int)(((*((unsigned int*)&ctf_now)) >> 31) << 1);
-//                                stack_corrected[n_z][i + j * Nxc] *= ctf_now;
-//                                stack_corrected[n_z][(i + 1) + j * Nxc] *= ctf_now;
+//                                stack_corrected[n_z][i * 2 + j * Nxc] *= ctf_now;
+//                                stack_corrected[n_z][(i * 2 + 1) + j * Nxc] *= ctf_now;
                             }
                         }
 
@@ -1001,7 +998,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     }
 #pragma omp parallel for
                     for (int n_z=0;n_z<n_zz;n_z++){
-#pragma omp simd
+//#pragma omp simd
                         for (int i = 0; i < Nxc * Ny; i++)   // normalization
                         {
                             stack_corrected[n_z][i] = stack_corrected[n_z][i] / (Nx * Ny);
