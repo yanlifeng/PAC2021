@@ -465,9 +465,9 @@ New icpc
 | ---------------------------- | ------- | ----- | ------ | ----- | ----------- | ----- |
 | g++ 128                      | 4.558   | 0.065 | 0.256  | 3.016 | 1.203+      | 5.35  |
 | icpc 64 strict new malloc    | 4.068   | 0.067 | 0.365  | 3.245 | 0.339+0.047 | 4.94  |
-| icpx  😭                      | 3.320   | 0.070 | 0.403  | 2.400 | 0.399+0.043 | 4.21  |
-| icpx  😭 mkl fftw             | 2.131   | 0.055 | 0.150  | 1.578 | 0.304+0.038 | 3.08  |
-| icpx  😭 mkl fftw no critical | 1.538   | 0.057 | 0.146  | 0.983 | 0.306+0.040 | 2.49  |
+| icpc  😭                      | 3.320   | 0.070 | 0.403  | 2.400 | 0.399+0.043 | 4.21  |
+| icpc  😭 mkl fftw             | 2.131   | 0.055 | 0.150  | 1.578 | 0.304+0.038 | 3.08  |
+| icpc  😭 mkl fftw no critical | 1.538   | 0.057 | 0.146  | 0.983 | 0.306+0.040 | 2.49  |
 
 大体上就是CTF部分不加strict可以开启自动向量化，能起到一定的提升，然后用mkl的fftw，本身就会快很多，如果在把critical去掉，就直接起飞。但是后三个😭版本过不去check，现在的想法是先手动向量化达到4.2s，然后想办法优化fftw中malloc和free部分的栅栏。
 
@@ -490,6 +490,50 @@ New icpc
 好啊，这部分手写的还行，和自动的效果几乎一样，明天搞一搞CTF部分的。
 
 冲冲冲。
+
+## 0801
+
+争取今天写好CTF的向量化能进破4s然后就去干点别的了，ali的比赛已经滚出第一页了，再不干活老甘就要🦈我了，QC也耽误了很久了。
+
+CTF部分打打timer发现critical和fftw比较耗时，相比之下forfor不太是热点了。。。。没办法，简单写写向量化吧争取到4.2。
+
+不太对，重新打了计时函数发现CTF中与处理部分慢了，没有并行。
+
+```
+main for cost 3.389
+init and read cost 0.073
+weight cost 0.288
+pre bufc cost 0.266
+pre atant cost 0.016
+fftw malloc cost 0.227
+hotspots1 cost 2.156
+fftw free cost 0.020
+bufc free cost 0.000
+rebu cost 0.339
+stack_corrected free cost 0.001
+Wrtie out final reconstruction result:
+Done
+
+Finish reconstruction successfully!
+All results save in: ./
+
+
+Finish!
+Time elapsed: 5s
+
+tot cost 4.26720
+```
+
+争取写好向量化到3.7
+
+| Verison                                         | Cpp tot | Read  | Weight | CTF                            | Rebu        | Total |
+| ----------------------------------------------- | ------- | ----- | ------ | ------------------------------ | ----------- | ----- |
+| g++ 128                                         | 4.558   | 0.065 | 0.256  | 3.016                          | 1.203+      | 5.35  |
+| icpc 64 strict new malloc                       | 4.068   | 0.067 | 0.365  | 3.245                          | 0.339+0.047 | 4.94  |
+| icpc 64 vectorize by 👋                          | 3.861   | 0.071 | 0.252  | 3.183                          | 0.303+0.047 | 4.86  |
+| icpc 64 omp for CTF pre data and remove img_pre | 3.389   | 0.079 | 0.240  | 0.266+0.016+0.227 +2.156+0.020 | 0.339+0.000 | 4.26  |
+| 👆remove cos                                     | 2.965   |       |        | +1.756+                        |             | 3.80  |
+| CTF vectorize                                   | 2.778   | 0.075 | 0.255  | 0.193+0.065+0.228 +1.518+0.018 | 0.343+      | 3.70  |
 
 
 

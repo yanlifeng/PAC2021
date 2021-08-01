@@ -9,7 +9,7 @@
 - [x] why 3DCTF nx * ny --> (nx+2-nx%2) * ny
 - [ ] fftw omp critical
 - [ ] change g++ version
-- [ ] vectorize for Rebu when g++
+- [x] vectorize for Rebu when g++
 
 
 

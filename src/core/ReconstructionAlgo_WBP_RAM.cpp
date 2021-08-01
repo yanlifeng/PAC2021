@@ -852,8 +852,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                             float y_real = float(y_norm) / float(Ny) * (1 / pix);
                             float alpha = atan(y_real / x_real);
                             atan_xy[j * Nx + i] = alpha;
-                            sin_atan_xy[j * Nx + i] = sin(2 * alpha);
-                            cos_atan_xy[j * Nx + i] = cos(2 * alpha);
+//                            sin_atan_xy[j * Nx + i] = sin(2 * alpha);
+//                            cos_atan_xy[j * Nx + i] = cos(2 * alpha);
 
                         }
                     }
@@ -881,7 +881,6 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
 
                         int n_z = (zz + int(h_tilt_max / 2)) / defocus_step;
-//                        stack_corrected[n_z] = new float[Nx2 * Ny];
                         float *image = stack_corrected + n_z * Nx2 * Ny;
                         CTF ctf = ctf_para[n];
                         float z_offset = float(zz) + float(defocus_step - 1) / 2;
@@ -901,6 +900,22 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                         float sin2ast = sin(2 * astig);
                         float cos2ast = cos(2 * astig);
 
+                        float div_Nx = 1.0 / float(Nx) * (1 / pix);
+
+                        __m512 a_con = _mm512_set1_ps(A);
+                        __m512 d1_d2 = _mm512_set1_ps(defocus1 - defocus2);
+                        __m512 div_con = _mm512_set1_ps(div_Nx);
+                        __m512 ofive = _mm512_set1_ps(0.5);
+                        __m512 two_con = _mm512_set1_ps(2);
+                        __m512 neg_one = _mm512_set1_ps(-1);
+                        __m512 astig_con = _mm512_set1_ps(astig);
+                        __m512 lambda_con = _mm512_set1_ps(lambda);
+                        __m512d M_PI_2_con = _mm512_set1_pd(M_PI_2);
+                        __m512 mul_tmp1 = _mm512_set1_ps(M_PI * lambda);
+                        __m512 mul_tmp2 = _mm512_set1_ps(M_PI_2 * Cs * lambda * lambda * lambda);
+                        __m512 phase_shift_con = _mm512_set1_ps(phase_shift);
+                        __m512d a_w_cos_con = _mm512_set1_pd(a_w_cos);
+                        __m512i si_con = _mm512_set1_epi32(16);
 
                         for (int j = 0; j < min(1, Ny); j++) {
                             for (int i = 0; i < Nxh; i++) {
@@ -974,35 +989,15 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
                             float y_norm = (j >= Nyh) ? (j - Ny) : (j);
                             float y_real = float(y_norm) / float(Ny) * (1 / pix);
-                            float div_Nx = 1.0 / float(Nx) * (1 / pix);
 
 
                             __m512i idx = _mm512_set_epi32(16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1);
                             __m512i jNx_con = _mm512_set1_epi32(j * Nx);
                             __m512i jNx2_con = _mm512_set1_epi32(j * Nx2);
                             __m512 y_real_con = _mm512_set1_ps(y_real);
-                            __m512 a_con = _mm512_set1_ps(A);
-                            __m512 d1_d2 = _mm512_set1_ps(defocus1 - defocus2);
-                            __m512 div_con = _mm512_set1_ps(div_Nx);
-                            __m512 ofive = _mm512_set1_ps(0.5);
-                            __m512 two_con = _mm512_set1_ps(2);
-                            __m512 neg_one = _mm512_set1_ps(-1);
-                            __m512 astig_con = _mm512_set1_ps(astig);
-                            __m512 lambda_con = _mm512_set1_ps(lambda);
-                            __m512d M_PI_2_con = _mm512_set1_pd(M_PI_2);
-                            __m512 mul_tmp1 = _mm512_set1_ps(M_PI * lambda);
-                            __m512 mul_tmp2 = _mm512_set1_ps(M_PI_2 * Cs * lambda * lambda * lambda);
-                            __m512 phase_shift_con = _mm512_set1_ps(phase_shift);
-                            __m512d a_w_cos_con = _mm512_set1_pd(a_w_cos);
-                            __m512i si_con = _mm512_set1_epi32(16);
-
-                            static int cnt = 0;
-                            static int checkoo = 0;
-
 
                             int i = 1;
                             for (; i + 16 <= Nxh; i += 16) {
-                                cnt--;
                                 //float x_norm = i;
                                 __m512 x_norm = _mm512_cvtepi32_ps(idx);
 
@@ -1012,46 +1007,10 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 //float alpha = atan_xy[j * Nx + i];
                                 __m512 alpha = _mm512_load_ps(atan_xy + j * Nx + i);
 
-//                                if (cnt >= 0) {
-//                                    float tmp[16];
-//                                    _mm512_store_ps(tmp, alpha);
-//                                    cout << "cal alpha:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        printf("%.3f ", tmp[ii]);
-//                                    }
-//                                    cout << endl;
-//                                    cout << "std alpha:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        printf("%.3f ", atan_xy[j * Nx + i + ii]);
-//                                    }
-//                                    cout << endl;
-//                                }
-
+//
                                 //float freq2 = x_real * x_real + y_real * y_real;
                                 __m512 freq2 = _mm512_add_ps(_mm512_mul_ps(x_real, x_real),
                                                              _mm512_mul_ps(y_real_con, y_real_con));
-//                                if (cnt >= 0) {
-//                                    float tmp[16];
-//                                    _mm512_store_ps(tmp, freq2);
-//                                    cout << "cal freq2:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        printf("%.3f ", tmp[ii]);
-//                                    }
-//                                    cout << endl;
-//                                    cout << "std freq2:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        float x_norm = i + ii;
-//                                        float x_real = float(x_norm) * div_Nx;
-//                                        float alpha = atan_xy[j * Nx + i + ii];
-//
-//                                        float freq2 = x_real * x_real + y_real * y_real;
-//                                        printf("%.3f ", freq2);
-//                                    }
-//                                    cout << endl;
-//                                }
-
-
-
 
 //                                float df_now = (A + (defocus1 - defocus2) * mycos(2 * (alpha - astig))) / 2.0;
                                 //TODO defocus1 - defocus2 is too small that remove it can even pass check
@@ -1064,87 +1023,9 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //                                __m512 cos_tmp = _mm512_set1_ps(0);
                                 //TODO why _mm512_cosh_ps get wrong answer
 
-//                                    if (cnt >= 0) {
-//                                        float tmp[16];
-//                                        _mm512_store_ps(tmp, _mm512_mul_ps(two_con, _mm512_sub_ps(alpha, astig_con)));
-//                                        cout << "cal cos_tmp0:" << endl;
-//                                        for (int ii = 0; ii < 16; ii++) {
-//                                            printf("%.3f ", tmp[ii]);
-//                                        }
-//                                        cout << endl;
-//                                        cout << "std cos_tmp0:" << endl;
-//                                        for (int ii = 0; ii < 16; ii++) {
-//                                            float alpha = atan_xy[j * Nx + i + ii];
-//
-//                                            float cot_ = 2 * (alpha - astig);
-//                                            printf("%.3f ", cot_);
-//                                        }
-//                                        cout << endl;
-//                                    }
-//
-//                                    if (cnt >= 0) {
-//                                        float tmp[16];
-//                                        _mm512_store_ps(tmp, cos_tmp);
-//                                        cout << "cal cos_tmp:" << endl;
-//                                        for (int ii = 0; ii < 16; ii++) {
-//                                            printf("%.3f ", tmp[ii]);
-//                                        }
-//                                        cout << endl;
-//                                        cout << "std cos_tmp:" << endl;
-//                                        for (int ii = 0; ii < 16; ii++) {
-//                                            float alpha = atan_xy[j * Nx + i + ii];
-//
-//                                            float cot_ = cos(2 * (alpha - astig));
-//                                            printf("%.3f ", cot_);
-//                                        }
-//                                        cout << endl;
-//                                    }
-//
-//
-//                                    if (checkoo) {
-//                                        float tmp[16];
-//                                        _mm512_store_ps(tmp, cos_tmp);
-//
-//                                        for (int ii = 0; ii < 16; ii++) {
-//                                            float x_norm = i + ii;
-//                                            float x_real = float(x_norm) * div_Nx;
-//                                            float alpha = atan_xy[j * Nx + i + ii];
-//
-//                                            float cot_ = cos(2 * (alpha - astig));
-//                                            if (fabs(cot_ - tmp[ii]) > eps) {
-//                                                printf("GG\n");
-//                                                printf("%.3f %.3f\n", cot_, tmp[ii]);
-//                                                exit(0);
-//                                            }
-//                                        }
-//                                        cout << endl;
-//                                    }
                                 __m512 df_now = _mm512_mul_ps(_mm512_add_ps(a_con, _mm512_mul_ps(d1_d2, cos_tmp)),
                                                               ofive);
 //                                __m512 df_now = _mm512_mul_ps(a_con, ofive);
-
-//                                if (cnt >= 0) {
-//
-//                                    float tmp[16];
-//                                    _mm512_store_ps(tmp, df_now);
-//                                    cout << "cal df_now:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        printf("%.7f ", tmp[ii]);
-//                                    }
-//                                    cout << endl;
-//                                    cout << "std df_now:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        float x_norm = i + ii;
-//                                        float x_real = float(x_norm) * div_Nx;
-//                                        float alpha = atan_xy[j * Nx + i + ii];
-//
-//                                        float freq2 = x_real * x_real + y_real * y_real;
-//                                        float df_now = A * 0.5;
-//
-//                                        printf("%.7f ", df_now);
-//                                    }
-//                                    cout << endl;
-//                                }
 
 //                                    float chi = M_PI * lambda * df_now * freq2 -
 //                                                M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2
@@ -1159,126 +1040,12 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
                                 __m512 chi = _mm512_add_ps(_mm512_sub_ps(tmp1, tmp2), phase_shift_con);
 
-//                                if (checkoo) {
-//                                    float tmp[16];
-//                                    _mm512_store_ps(tmp, chi);
-//
-//                                    for (int ii = 0; ii < 16; ii++) {
-//
-//                                        float x_norm = i + ii;
-//                                        float x_real = float(x_norm) * div_Nx;
-//                                        float alpha = atan_xy[j * Nx + i + ii];
-//
-//                                        float freq2 = x_real * x_real + y_real * y_real;
-//                                        float df_now = (A) * 0.5;
-//                                        float chi = float(M_PI) * lambda * df_now * freq2 -
-//                                                    float(M_PI_2) * Cs * lambda * lambda * lambda * freq2 * freq2
-//                                                    + phase_shift;
-//                                        if (fabs(chi - tmp[ii]) > 1e-7) {
-//                                            printf("GG\n");
-//                                            printf("%.7f %.7f\n", chi, tmp[ii]);
-//                                            exit(0);
-//                                        }
-//                                    }
-//                                }
-
-//                                if (cnt >= 0) {
-//                                    float tmp[16];
-//                                    _mm512_store_ps(tmp, chi);
-//                                    cout << "cal chi:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        printf("%.10f ", tmp[ii]);
-//                                    }
-//                                    cout << endl;
-//                                    cout << "std chi:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++) {
-//
-//                                        float x_norm = i + ii;
-//                                        float x_real = float(x_norm) * div_Nx;
-//                                        float alpha = atan_xy[j * Nx + i + ii];
-//
-//                                        float freq2 = x_real * x_real + y_real * y_real;
-//                                        float df_now = (A) * 0.5;
-//                                        float chi = float(M_PI) * lambda * df_now * freq2 -
-//                                                    float(M_PI_2) * Cs * lambda * lambda * lambda * freq2 * freq2
-//                                                    + phase_shift;
-//                                        printf("%.10f ", chi);
-//                                    }
-//                                    cout << endl;
-//                                }
-
-
                                 //double rrr = chi - a_w_cos;
 
                                 __m256 chi0 = _mm512_extractf32x8_ps(chi, 0);
                                 __m256 chi1 = _mm512_extractf32x8_ps(chi, 1);
                                 __m512d rr0 = _mm512_abs_pd(_mm512_sub_pd(_mm512_cvtps_pd(chi0), a_w_cos_con));
                                 __m512d rr1 = _mm512_abs_pd(_mm512_sub_pd(_mm512_cvtps_pd(chi1), a_w_cos_con));
-
-//                                if (checkoo) {
-//                                    double tmp0[8];
-//                                    _mm512_store_pd(tmp0, rr0);
-//                                    double tmp1[8];
-//                                    _mm512_store_pd(tmp1, rr1);
-//
-//                                    for (int ii = 0; ii < 16; ii++) {
-//
-//                                        float x_norm = i + ii;
-//                                        float x_real = float(x_norm) * div_Nx;
-//                                        float alpha = atan_xy[j * Nx + i + ii];
-//
-//                                        float freq2 = x_real * x_real + y_real * y_real;
-//                                        float df_now = (A) / 2.0;
-//                                        float chi = float(M_PI) * lambda * df_now * freq2 -
-//                                                    float(M_PI_2) * Cs * lambda * lambda * lambda * freq2 * freq2
-//                                                    + phase_shift;
-//                                        if (ii < 8) {
-//                                            if (fabs(fabs(chi - a_w_cos) - tmp0[ii]) > 1e-7) {
-//                                                printf("GG\n");
-//                                                printf("%.7f %.7f\n", fabs(chi - a_w_cos), tmp0[ii]);
-//                                                exit(0);
-//
-//                                            }
-//                                        } else {
-//                                            if (fabs(fabs(chi - a_w_cos) - tmp1[ii - 8]) > 1e-7) {
-//                                                printf("GG\n");
-//                                                printf("%.7f %.7f\n", fabs(chi - a_w_cos), tmp1[ii - 8]);
-//                                                exit(0);
-//                                            }
-//                                        }
-//                                    }
-//                                }
-
-//                                __m512 rrr = _mm512_abs_ps(_mm512_sub_ps(chi, a_w_cos_con));
-
-//                                if (cnt >= 0) {
-//                                    double tmp[8];
-//                                    _mm512_store_pd(tmp, rr0);
-//                                    cout << "cal rrr:" << endl;
-//                                    for (int ii = 0; ii < 8; ii++) {
-//                                        printf("%.7f ", tmp[ii]);
-//                                    }
-//                                    _mm512_store_pd(tmp, rr1);
-//                                    for (int ii = 0; ii < 8; ii++) {
-//                                        printf("%.7f ", tmp[ii]);
-//                                    }
-//                                    cout << endl;
-//                                    cout << "std rrr:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++) {
-//
-//                                        float x_norm = i + ii;
-//                                        float x_real = float(x_norm) * div_Nx;
-//                                        float alpha = atan_xy[j * Nx + i + ii];
-//
-//                                        float freq2 = x_real * x_real + y_real * y_real;
-//                                        float df_now = (A) / 2.0;
-//                                        float chi = float(M_PI) * lambda * df_now * freq2 -
-//                                                    float(M_PI_2) * Cs * lambda * lambda * lambda * freq2 * freq2
-//                                                    + phase_shift;
-//                                        printf("%.7f ", fabs(chi - a_w_cos));
-//                                    }
-//                                    cout << endl;
-//                                }
 
                                 //int mul_base = 1;
 
@@ -1298,24 +1065,6 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                     mul_base1 = _mm512_cmp_pd_mask(rr1, M_PI_2_con, _CMP_GT_OS);
                                 }
                                 __mmask16 mul_base = mul_base0 + ((int(mul_base1)) << 8);
-
-//                                if (mul_base != 0 && mul_base != (1 << 16) - 1) {
-////                                    cout << mul_base0 << " " << ((int(mul_base0)) << 8) << endl;
-//                                    cout << "mul_base:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)
-//                                        printf("%d ", (mul_base >> ii) & 1);
-//                                    cout << endl;
-//                                    cout << "mul_base0 mul_base1:" << endl;
-//                                    for (int ii = 0; ii < 8; ii++)
-//                                        printf("%d ", (mul_base0 >> ii) & 1);
-//                                    for (int ii = 0; ii < 8; ii++)
-//                                        printf("%d ", (mul_base1 >> ii) & 1);
-//                                    cout << endl;
-//                                }
-//                                    if (mul_base < 0) {
-//                                        image[i * 2 + j * Nx2] *= -1;
-//                                        image[(i * 2 + 1) + j * Nx2] *= -1;
-//                                    }
 
                                 __mmask16 big_base0 = mak_pre[mul_base0];
                                 __mmask16 big_base1 = mak_pre[mul_base1];
@@ -1361,12 +1110,12 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //                                float df_now = (A + (defocus1 - defocus2) * (cos_atan_xy[j * Nx + i] * cos2ast +
 //                                                                             sin_atan_xy[j * Nx + i] * sin2ast)) / 2.0;
                                 //TODO is float(cos) right?
-                                float df_now = (A + (defocus1 - defocus2) * float(cos(2 * (alpha - astig)))) / 2.0;
+                                float df_now = (A + (defocus1 - defocus2) * (cos(2 * (alpha - astig)))) / 2.0;
 
 //                                float df_now = (A + (defocus1 - defocus2) * mycos(2 * (alpha - astig))) / 2.0;
                                 //TODO defocus1 - defocus2 is too small that remove it can even pass check
-                                float chi = M_PI * lambda * df_now * freq2 -
-                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2
+                                float chi = float(M_PI) * lambda * df_now * freq2 -
+                                            float(M_PI_2) * Cs * lambda * lambda * lambda * freq2 * freq2
                                             + phase_shift;
 //                                float ctf_now_tmp = w_sin * sin(chi) + w_cos * cos(chi);
                                 double rrr = chi - a_w_cos;
@@ -1421,6 +1170,16 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     // loop: Ny (number of xz-slices)
 #pragma omp parallel for num_threads(threadNumber)
                     for (int j = 0; j < Ny; j++) {
+                        __m512i nxy_con = _mm512_set1_epi32(Nx2 * Ny);
+                        __m512i nx2_con = _mm512_set1_epi32(Nx2);
+                        __m512i j_con = _mm512_set1_epi32(j);
+                        __m512i si_con = _mm512_set1_epi32(16);
+                        __m512d cos_con = _mm512_set1_pd(theta_rad_cos);
+                        __m512d sin_con = _mm512_set1_pd(theta_rad_sin);
+                        __m512 offset_con = _mm512_set1_ps(x_orig_offset);
+                        __m512 eps_con = _mm512_set1_ps(1 - eps);
+                        __m512 one_con = _mm512_set1_ps(1);
+                        __m512 d_step_con = _mm512_set1_ps(1.0 / defocus_step);
 
                         // loop: Nx*h (whole xz-slice)
                         for (int k = 0; k < h; k++) {
@@ -1454,22 +1213,13 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                             int i = li;
                             __m512d a_con = _mm512_set1_pd(A);
                             __m512d b_con = _mm512_set1_pd(B);
-                            __m512d cos_con = _mm512_set1_pd(theta_rad_cos);
-                            __m512d sin_con = _mm512_set1_pd(theta_rad_sin);
-                            __m512 offset_con = _mm512_set1_ps(x_orig_offset);
-                            __m512 eps_con = _mm512_set1_ps(1 - eps);
+
                             __m512 c_con = _mm512_set1_ps(C);
-                            __m512 d_step_con = _mm512_set1_ps(1.0 / defocus_step);
                             __m512i idx = _mm512_set_epi32(li + 15, li + 14, li + 13, li + 12, li + 11, li + 10,
                                                            li + 9,
                                                            li + 8, li + 7, li + 6, li + 5, li + 4, li + 3, li + 2,
                                                            li + 1, li + 0);
-                            __m512i nxy_con = _mm512_set1_epi32(Nx2 * Ny);
-                            __m512i nx2_con = _mm512_set1_epi32(Nx2);
-                            __m512i j_con = _mm512_set1_epi32(j);
-                            __m512i si_con = _mm512_set1_epi32(16);
 
-                            __m512 one_con = _mm512_set1_ps(1);
 
 //                            static int cnt = 100;
 //                            bool checcc = 0;
@@ -1480,93 +1230,27 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 //float x_orig = (i - x_orig_offset) * theta_rad_cos - A;
                                 //float z_orig = (i - x_orig_offset) * theta_rad_sin + B;
 
-//                                if (cnt <= 10) {
-//                                    int tmp[16];
-//                                    _mm512_store_epi32(tmp, idx);
-//                                    cout << "idx cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "idx std:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", i + ii);
-//                                    cout << endl;
-//                                }
 
-//                                cnt++;
                                 //i - x_orig_offset
                                 __m512 sub_tmp = _mm512_sub_ps(_mm512_cvtepi32_ps(idx), offset_con);
 
-//                                if (cnt <= 10) {
-//                                    float tmp[16];
-//                                    _mm512_store_ps(tmp, sub_tmp);
-//                                    cout << "sub_tmp cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "sub_tmp std:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", i + ii - x_orig_offset);
-//                                    cout << endl;
-//                                }
+
 
                                 //select pre 8 float to f0, last 8 to f1
                                 __m256 f0 = _mm512_extractf32x8_ps(sub_tmp, 0);
                                 __m256 f1 = _mm512_extractf32x8_ps(sub_tmp, 1);
                                 __m512d d0 = _mm512_cvtps_pd(f0);
                                 __m512d d1 = _mm512_cvtps_pd(f1);
-//                                if (cnt <= 10) {
-//                                    double tmp[8];
-//                                    _mm512_store_pd(tmp, d0);
-//                                    cout << "d0 cal:" << endl;
-//                                    for (int ii = 0; ii < 8; ii++)printf("%.3f ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "d0 std:" << endl;
-//                                    for (int ii = 0; ii < 8; ii++)printf("%.3f ", i + ii - x_orig_offset);
-//                                    cout << endl;
-//
-//                                    _mm512_store_pd(tmp, d1);
-//                                    cout << "d1 cal:" << endl;
-//                                    for (int ii = 0; ii < 8; ii++)printf("%.3f ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "d1 std:" << endl;
-//                                    for (int ii = 0; ii < 8; ii++)printf("%.3f ", i + ii + 8 - x_orig_offset);
-//                                    cout << endl;
-//                                }
                                 // sub_tmp * theta_rad_cos - A
                                 __m512d x_tmp0 = _mm512_sub_pd(_mm512_mul_pd(d0, cos_con), a_con);
                                 __m512d x_tmp1 = _mm512_sub_pd(_mm512_mul_pd(d1, cos_con), a_con);
-//                                if (cnt <= 10) {
-//                                    double tmp[8];
-//                                    _mm512_store_pd(tmp, x_tmp0);
-//                                    cout << "x_tmp0 cal:" << endl;
-//                                    for (int ii = 0; ii < 8; ii++)printf("%.3f ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "x_tmp0 std:" << endl;
-//                                    for (int ii = 0; ii < 8; ii++)
-//                                        printf("%.3f ", (i + ii - x_orig_offset) * theta_rad_cos - A);
-//                                    cout << endl;
-//                                    _mm512_store_pd(tmp, x_tmp1);
-//                                    cout << "x_tmp1 cal:" << endl;
-//                                    for (int ii = 0; ii < 8; ii++)printf("%.3f ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "x_tmp1 std:" << endl;
-//                                    for (int ii = 0; ii < 8; ii++)
-//                                        printf("%.3f ", (i + ii + 8 - x_orig_offset) * theta_rad_cos - A);
-//                                    cout << endl;
-//                                }
+
                                 //merge 8+8 double to 16 float
                                 __m512 x_ori;
                                 x_ori = _mm512_insertf32x8(x_ori, _mm512_cvtpd_ps(x_tmp0), 0);
                                 x_ori = _mm512_insertf32x8(x_ori, _mm512_cvtpd_ps(x_tmp1), 1);
 
-//                                if (cnt <= 10) {
-//                                    float tmp[16];
-//                                    _mm512_store_ps(tmp, x_ori);
-//                                    cout << "x_ori cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "x_ori std:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)
-//                                        printf("%.3f ", (i + ii - x_orig_offset) * theta_rad_cos - A);
-//                                    cout << endl;
-//                                }
+
 
                                 // sub_tmp * theta_rad_sin + B
                                 __m512d z_tmp0 = _mm512_add_pd(_mm512_mul_pd(d0, sin_con), b_con);
@@ -1575,70 +1259,16 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 __m512 z_ori;
                                 z_ori = _mm512_insertf32x8(z_ori, _mm512_cvtpd_ps(z_tmp0), 0);
                                 z_ori = _mm512_insertf32x8(z_ori, _mm512_cvtpd_ps(z_tmp1), 1);
-//                                if (cnt <= 10) {
-//                                    float tmp[16];
-//                                    _mm512_store_ps(tmp, z_ori);
-//                                    cout << "z_ori cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "z_ori std:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)
-//                                        printf("%.3f ", (i + ii - x_orig_offset) * theta_rad_sin + B);
-//                                    cout << endl;
-//                                }
-//                                if (checcc) {
-//                                    float tmp1[16];
-//                                    _mm512_store_ps(tmp1, x_ori);
-//                                    float tmp2[16];
-//                                    _mm512_store_ps(tmp2, z_ori);
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        float x_orig = (ii + i - x_orig_offset) * theta_rad_cos - A;
-//                                        float z_orig = (ii + i - x_orig_offset) * theta_rad_sin + B;
-//                                        if (fabs(x_orig - tmp1[ii]) > 1e-5) {
-//                                            printf("GG\n");
-//                                            printf("x_orig on %d %d %d\n", j, k, i + ii);
-//                                            printf("%.6f %.6f\n", x_orig, tmp1[ii]);
-//                                            exit(0);
-//                                        }
-//                                        if (fabs(z_orig - tmp2[ii]) > 1e-5) {
-//                                            printf("GG\n");
-//                                            printf("z_orig on %d %d %d\n", j, k, i + ii);
-//                                            printf("%.6f %.6f\n", z_orig, tmp2[ii]);
-//                                            exit(0);
-//                                        }
-//                                    }
-//                                }
 
                                 //int x1 = int(x_orig);
                                 __m512i x1 = _mm512_cvt_roundps_epi32(x_ori,
                                                                       _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
-//                                if (cnt <= 10) {
-//                                    int tmp[16];
-//                                    _mm512_store_epi32(tmp, x1);
-//                                    cout << "x1 cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "x1 std:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)
-//                                        printf("%d ", int((i + ii - x_orig_offset) * theta_rad_cos - A));
-//                                    cout << endl;
-//                                }
 
                                 //int x2 = int(x_orig + 1 - eps);
                                 __m512i x2 = _mm512_cvt_roundps_epi32(_mm512_add_ps(x_ori, eps_con),
                                                                       _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
 
-//                                if (cnt <= 10) {
-//                                    int tmp[16];
-//                                    _mm512_store_epi32(tmp, x2);
-//                                    cout << "x2 cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "x2 std:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)
-//                                        printf("%d ", int((i + ii - x_orig_offset) * theta_rad_cos - A + 1 - eps));
-//                                    cout << endl;
-//                                }
+
 
                                 //float coeff = x_orig - x1;
                                 __m512 coeff = _mm512_sub_ps(x_ori, _mm512_cvtepi32_ps(x1));
@@ -1647,93 +1277,25 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 //TODO change div to mul
                                 __m512 nz_tmp = _mm512_mul_ps(_mm512_add_ps(z_ori, c_con), d_step_con);
 
-//                                if (cnt <= 10) {
-//                                    float tmp[16];
-//                                    _mm512_store_ps(tmp, nz_tmp);
-//                                    cout << "nz_tmp cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "nz_tmp std:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)
-//                                        printf("%.3f ",
-//                                               (((i + ii - x_orig_offset) * theta_rad_sin + B + C) / defocus_step));
-//                                    cout << endl;
-//                                }
+
                                 __m512i n_z = _mm512_cvt_roundps_epi32(nz_tmp,
                                                                        _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
 
 
-//                                if (cnt <= 10) {
-//                                    int tmp[16];
-//                                    _mm512_store_epi32(tmp, n_z);
-//                                    cout << "n_z cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "n_z std:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)
-//                                        printf("%d ",
-//                                               int(((i + ii - x_orig_offset) * theta_rad_sin + B + C) / defocus_step));
-//                                    cout << endl;
-//                                }
+
 
                                 //cal  n_z * Nx2 * Ny + j * Nx2
                                 __m512i tt0 = _mm512_mullo_epi32(n_z, nxy_con);
                                 __m512i tt1 = _mm512_mullo_epi32(j_con, nx2_con);
-//                                if (cnt <= 10) {
-//                                    int tmp[16];
-//                                    _mm512_store_epi32(tmp, n_z);
-//                                    cout << "n_z cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
-//                                    cout << endl;
-//                                    _mm512_store_epi32(tmp, nxy_con);
-//                                    cout << "nxy_con cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
-//                                    cout << endl;
-//
-//                                    _mm512_store_epi32(tmp, tt0);
-//                                    cout << "tt0 cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
-//                                    cout << endl;
-//                                }
 
 
                                 __m512i ids_base = _mm512_add_epi32(tt0, tt1);
 
-//                                if (cnt <= 10) {
-//                                    int tmp[16];
-//                                    _mm512_store_epi32(tmp, ids_base);
-//                                    cout << "ids_base cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
-//                                    cout << endl;
-//                                    int nz_id[16];
-//                                    _mm512_store_epi32(nz_id, n_z);
-//
-//                                    cout << "ids_base std:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)
-//                                        printf("%d ", nz_id[ii] * Nx2 * Ny + j * Nx2);
-//                                    cout << endl;
-//                                }
 
                                 //cal  n_z * Nx2 * Ny + j * Nx2 + x1
                                 __m512i ids1 = _mm512_add_epi32(ids_base, x1);
                                 //cal  n_z * Nx2 * Ny + j * Nx2 + x2
                                 __m512i ids2 = _mm512_add_epi32(ids_base, x2);
-
-//                                if (cnt <= 10) {
-//                                    int tmp[16];
-//                                    _mm512_store_epi32(tmp, ids1);
-//                                    cout << "ids1 cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%d ", tmp[ii]);
-//                                    cout << endl;
-//                                    int base_id[16];
-//                                    _mm512_store_epi32(base_id, ids_base);
-//                                    int x1_id[16];
-//                                    _mm512_store_epi32(x1_id, x1);
-//                                    cout << "ids1 std:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)
-//                                        printf("%d ", base_id[ii] + x1_id[ii]);
-//                                    cout << endl;
-//                                }
 
 
                                 __m512 cc0 = _mm512_i32gather_ps(ids1, stack_corrected, 4);
@@ -1750,114 +1312,13 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 __m512 c1 = _mm512_mul_ps(coeff, cc1);
 
 
-//                                if (checcc) {
-//                                    float tmp1[16];
-//                                    _mm512_store_ps(tmp1, c0);
-//                                    float tmp2[16];
-//                                    _mm512_store_ps(tmp2, c1);
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        float x_orig = (i + ii - x_orig_offset) * theta_rad_cos - A;
-//                                        float z_orig = (i + ii - x_orig_offset) * theta_rad_sin + B;
-//                                        int x1 = int(x_orig);
-//                                        int x2 = int(x_orig + 1 - eps);
-//                                        float coeff = x_orig - x1;
-//                                        int n_z = int((z_orig + C) / defocus_step);
-//                                        // the num in the corrected stack for the current height
-//
-//                                        float ttr0 = (1 - coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x1];
-//                                        float ttr1 = (coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x2];
-//
-//                                        if (fabs(ttr0 - tmp1[ii]) > 1e-5) {
-//                                            printf("GG\n");
-//                                            printf("c0 on %d %d %d\n", j, k, i + ii);
-//                                            printf("%.6f %.6f\n", ttr0, tmp1[ii]);
-//                                            exit(0);
-//                                        }
-//                                        if (fabs(ttr1 - tmp2[ii]) > 1e-5) {
-//                                            printf("GG\n");
-//                                            printf("c1 on %d %d %d\n", j, k, i + ii);
-//                                            printf("%.6f %.6f\n", ttr1, tmp2[ii]);
-//                                            exit(0);
-//                                        }
-//
-//
-//                                    }
-//                                }
-
-//                                if (cnt <= 10) {
-//                                    float tmp[16];
-//                                    _mm512_store_ps(tmp, c0);
-//                                    cout << "c0 cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "c0 std:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        int idd = i + ii;
-//                                        float x_orig = (idd - x_orig_offset) * theta_rad_cos - A;
-//                                        float z_orig = (idd - x_orig_offset) * theta_rad_sin + B;
-//                                        int x1 = int(x_orig);
-//                                        int x2 = int(x_orig + 1 - eps);
-//                                        float coeff = x_orig - x1;
-//                                        int n_z = int((z_orig + C) / defocus_step);
-//                                        float tttx = (1 - coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x1];
-//                                        printf("%.3f ", tttx);
-//                                    }
-//                                    cout << endl;
-//                                    _mm512_store_ps(tmp, c1);
-//                                    cout << "c1 cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "c1 std:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        int idd = i + ii;
-//                                        float x_orig = (idd - x_orig_offset) * theta_rad_cos - A;
-//                                        float z_orig = (idd - x_orig_offset) * theta_rad_sin + B;
-//                                        int x1 = int(x_orig);
-//                                        int x2 = int(x_orig + 1 - eps);
-//                                        float coeff = x_orig - x1;
-//                                        int n_z = int((z_orig + C) / defocus_step);
-//                                        float tttx = (coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x2];
-//                                        printf("%.3f ", tttx);
-//                                    }
-//                                    cout << endl;
-//                                }
-
-//                                cout << "222" << endl;
-
-
                                 float *p_now = stack_recon[j] + k * Nx + i;
                                 __m512 tmplod = _mm512_load_ps(p_now);
-//                                if (cnt <= 10) {
-//                                    float tmp[16];
-//                                    _mm512_store_ps(tmp, tmplod);
-//                                    cout << "tmplod cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "tmplod std:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        int idd = i + ii;
-//                                        printf("%.3f ", stack_recon[j][idd + k * Nx]);
-//                                    }
-//                                    cout << endl;
-//                                }
+
                                 //last baba
                                 __m512 resss = _mm512_add_ps(_mm512_add_ps(c0, c1), tmplod);
                                 _mm512_store_ps(p_now, resss);
 
-//                                if (cnt <= 10) {
-//                                    __m512 rechr = _mm512_load_ps(p_now);
-//                                    float tmp[16];
-//                                    _mm512_store_ps(tmp, rechr);
-//                                    cout << "rechr cal:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++)printf("%.3f ", tmp[ii]);
-//                                    cout << endl;
-//                                    cout << "c0 std:" << endl;
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        int idd = i + ii;
-//                                        printf("%.3f ", 0);
-//                                    }
-//                                    cout << endl;
-//                                }
 
                                 idx = _mm512_add_epi32(idx, si_con);
 
