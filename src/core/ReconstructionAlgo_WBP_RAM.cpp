@@ -586,6 +586,15 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         double cost3 = 0;
         double t0, t1, t2, t3;
 
+        double tcost0 = 0;
+        double tcost1 = 0;
+        double tcost2 = 0;
+        double tcost3 = 0;
+        double tcost4 = 0;
+        double tcost5 = 0;
+        double tcost6 = 0;
+
+
         t0 = GetTime();
 
         cout << "range " << stack_orig.getNx() << " " << stack_orig.getNy() << " " << stack_orig.getNz() << endl;
@@ -829,9 +838,20 @@ fft2buf cost 0.00098
 last cost 0.00014
                      */
 
+                    double cc0[threadNumber] = {0};
+                    double cc1[threadNumber] = {0};
+                    double cc2[threadNumber] = {0};
+                    double cc3[threadNumber] = {0};
+                    double cc4[threadNumber] = {0};
+                    double cc5[threadNumber] = {0};
+                    double cc6[threadNumber] = {0};
+
+
 #pragma omp parallel for num_threads(threadNumber)
                     for (int zz = zl; zz < zr; zz += defocus_step) {
                         int thread_id = omp_get_thread_num();
+
+                        double tt0 = GetTime();
 
                         int n_z = (zz + int(h_tilt_max / 2)) / defocus_step;
 //                        stack_corrected[n_z] = new float[Nx2 * Ny];
@@ -839,6 +859,10 @@ last cost 0.00014
                         CTF ctf = ctf_para[n];
                         float z_offset = float(zz) + float(defocus_step - 1) / 2;
                         memcpy(image, bufc_pre, sizeof(float) * (Nx2 * Ny));
+
+                        cc0[thread_id] += GetTime() - tt0;
+                        tt0 = GetTime();
+
                         float defocus1 = ctf.defocus1;
                         float defocus2 = ctf.defocus2;
                         float astig = ctf.astig;
@@ -851,6 +875,8 @@ last cost 0.00014
                         float A = (defocus1 + defocus2 - 2 * z_offset * pix);
                         double sin2ast = sin(2 * astig);
                         double cos2ast = cos(2 * astig);
+
+
                         for (int j = 0; j < min(1, Ny); j++) {
                             for (int i = 0; i < Nxh; i++) {
                                 float x = i, y = j;
@@ -918,40 +944,150 @@ last cost 0.00014
                             }
                         }
 
+                        cc1[thread_id] += GetTime() - tt0;
+                        tt0 = GetTime();
 
-                        for (int j = 1; j < Ny; j++) {
+                        static bool vecO = 0;
+                        if (vecO) {
+//                            for (int j = 1; j < Ny; j++) {
+//
+//                                float y_norm = (j >= Nyh) ? (j - Ny) : (j);
+//                                float y_real = float(y_norm) / float(Ny) * (1 / pix);
+//                                float div_Nx = 1.0 / float(Nx) * (1 / pix);
+//
+//
+//                                __m512i idx = _mm512_set_epi32(16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1);
+//                                __m512i jNx_con = _mm512_set1_epi32(j * Nx);
+//                                __m512i jNx2_con = _mm512_set1_epi32(j * Nx2);
+//                                __m512 y_real_con = _mm512_set1_ps(y_real);
+//                                __m512 a_con = _mm512_set1_ps(A);
+//                                __m512 d1_d2 = _mm512_set1_ps(defocus1 - defocus2);
+//                                __m512 div_con = _mm512_set1_ps(div_Nx);
+//                                __m512 ofive = _mm512_set1_ps(0.5);
+//                                __m512 two_con = _mm512_set1_ps(2);
+//                                __m512 astig_con = _mm512_set1_ps(astig);
+//                                __m512 M_PI_con = _mm512_set1_ps(M_PI);
+//                                __m512 M_PI2con = _mm512_set1_ps(M_PI_2);
+//
+//
+//                                int i = 1;
+//                                for (; i + 16 <= Nxh; i += 16) {
+//                                    //float x_norm = i;
+//                                    __m512 x_norm = _mm512_cvtepi32_ps(idx);
+//
+//                                    //float x_real = x_norm * div_Nx;
+//                                    __m512 x_real = _mm512_mul_ps(x_norm, div_con);
+//
+//                                    //float alpha = atan_xy[j * Nx + i];
+//                                    __m512 alpha = _mm512_load_ps(atan_xy + j * Nx + i);
+//
+//
+//                                    //float freq2 = x_real * x_real + y_real * y_real;
+//                                    __m512 freq2 = _mm512_add_ps(_mm512_mul_ps(x_real, x_real),
+//                                                                 _mm512_mul_ps(y_real_con, y_real_con));
+//
+////                                float df_now = (A + (defocus1 - defocus2) * (cos_atan_xy[j * Nx + i] * cos2ast +
+////                                                                             sin_atan_xy[j * Nx + i] * sin2ast)) / 2.0;
+//                                    //TODO is float(cos) right?
+////                                    float df_now = (A + (defocus1 - defocus2) * float(cos(2 * (alpha - astig)))) * 0.5;
+//                                    __m512 cos_tmp = _mm512_cosh_ps(
+//                                            _mm512_mul_ps(two_con, _mm512_sub_ps(alpha, astig_con)));
+//                                    __m512 df_now = _mm512_mul_ps(_mm512_add_ps(a_con, _mm512_mul_ps(d1_d2, cos_tmp)),
+//                                                                  ofive);
+//
+//
+//
+////                                float df_now = (A + (defocus1 - defocus2) * mycos(2 * (alpha - astig))) / 2.0;
+//                                    //TODO defocus1 - defocus2 is too small that remove it can even pass check
+////                                    float chi = M_PI * lambda * df_now * freq2 -
+////                                                M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2
+////                                                + phase_shift;
+//
+////                                float ctf_now_tmp = w_sin * sin(chi) + w_cos * cos(chi);
+//                                    double rrr = chi - a_w_cos;
+//                                    int mul_base = 1;
+//                                    //TODO check if rrr will bigger than 2*pi
+//                                    if (fabs(rrr) > M_PI_2)mul_base = -1;
+//                                    if (flip_contrast) {
+//                                        mul_base = -mul_base;
+//                                    }
+//                                    if (mul_base < 0) {
+//                                        image[i * 2 + j * Nx2] *= -1;
+//                                        image[(i * 2 + 1) + j * Nx2] *= -1;
+//                                    }
+//                                }
+//
+//
+//                                for (; i < Nxh; i++) {
+//                                    float x_norm = i;
+//                                    float x_real = float(x_norm) * div_Nx;
+//                                    float alpha = atan_xy[j * Nx + i];
+//
+//                                    float freq2 = x_real * x_real + y_real * y_real;
+////                                float df_now = (A + (defocus1 - defocus2) * (cos_atan_xy[j * Nx + i] * cos2ast +
+////                                                                             sin_atan_xy[j * Nx + i] * sin2ast)) / 2.0;
+//                                    //TODO is float(cos) right?
+//                                    float df_now = (A + (defocus1 - defocus2) * float(cos(2 * (alpha - astig)))) / 2.0;
+//
+////                                float df_now = (A + (defocus1 - defocus2) * mycos(2 * (alpha - astig))) / 2.0;
+//                                    //TODO defocus1 - defocus2 is too small that remove it can even pass check
+//                                    float chi = M_PI * lambda * df_now * freq2 -
+//                                                M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2
+//                                                + phase_shift;
+////                                float ctf_now_tmp = w_sin * sin(chi) + w_cos * cos(chi);
+//                                    double rrr = chi - a_w_cos;
+//                                    int mul_base = 1;
+//                                    //TODO check if rrr will bigger than 2*pi
+//                                    if (fabs(rrr) > M_PI_2)mul_base = -1;
+//                                    if (flip_contrast) {
+//                                        mul_base = -mul_base;
+//                                    }
+//                                    if (mul_base < 0) {
+//                                        image[i * 2 + j * Nx2] *= -1;
+//                                        image[(i * 2 + 1) + j * Nx2] *= -1;
+//                                    }
+//                                }
+//                            }
+                        } else {
+                            for (int j = 1; j < Ny; j++) {
 //#pragma simd
-                            for (int i = 1; i < Nxh; i++) {
-                                float x_norm = i;
-                                float y_norm = (j >= Nyh) ? (j - Ny) : (j);
-                                float x_real = float(x_norm) / float(Nx) * (1 / pix);
-                                float y_real = float(y_norm) / float(Ny) * (1 / pix);
-                                float alpha = atan_xy[j * Nx + i];
+                                for (int i = 1; i < Nxh; i++) {
+                                    float x_norm = i;
+                                    float y_norm = (j >= Nyh) ? (j - Ny) : (j);
+                                    float x_real = float(x_norm) / float(Nx) * (1 / pix);
+                                    float y_real = float(y_norm) / float(Ny) * (1 / pix);
+                                    float alpha = atan_xy[j * Nx + i];
 
-                                float freq2 = x_real * x_real + y_real * y_real;
+                                    float freq2 = x_real * x_real + y_real * y_real;
 //                                float df_now = (A + (defocus1 - defocus2) * (cos_atan_xy[j * Nx + i] * cos2ast +
 //                                                                             sin_atan_xy[j * Nx + i] * sin2ast)) / 2.0;
-                                float df_now = (A + (defocus1 - defocus2) * cos(2 * (alpha - astig))) / 2.0;
+                                    float df_now = (A + (defocus1 - defocus2) * cos(2 * (alpha - astig))) * 0.5;
 
 //                                float df_now = (A + (defocus1 - defocus2) * mycos(2 * (alpha - astig))) / 2.0;
-                                //TODO defocus1 - defocus2 is too small that remove it can even pass check
-                                float chi = M_PI * lambda * df_now * freq2 -
-                                            M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2
-                                            + phase_shift;
+                                    //TODO defocus1 - defocus2 is too small that remove it can even pass check
+                                    float chi = (M_PI) * lambda * df_now * freq2 -
+                                                (M_PI_2) * Cs * lambda * lambda * lambda * freq2 * freq2
+                                                + phase_shift;
 //                                float ctf_now_tmp = w_sin * sin(chi) + w_cos * cos(chi);
-                                double rrr = chi - a_w_cos;
-                                int mul_base = 1;
-                                //TODO check if rrr will bigger than 2*pi
-                                if (fabs(rrr) > M_PI_2)mul_base = -1;
-                                if (flip_contrast) {
-                                    mul_base = -mul_base;
-                                }
-                                if (mul_base < 0) {
-                                    image[i * 2 + j * Nx2] *= -1;
-                                    image[(i * 2 + 1) + j * Nx2] *= -1;
+                                    double rrr = chi - a_w_cos;
+                                    int mul_base = 1;
+                                    //TODO check if rrr will bigger than 2*pi
+                                    if (fabs(rrr) > (M_PI_2))mul_base = -1;
+                                    if (flip_contrast) {
+                                        mul_base = -mul_base;
+                                    }
+                                    if (mul_base < 0) {
+                                        image[i * 2 + j * Nx2] *= -1;
+                                        image[(i * 2 + 1) + j * Nx2] *= -1;
+                                    }
                                 }
                             }
+
                         }
+
+                        cc2[thread_id] += GetTime() - tt0;
+                        tt0 = GetTime();
+
 
 
 
@@ -964,19 +1100,49 @@ last cost 0.00014
                                                               reinterpret_cast<fftwf_complex *>(image),
                                                               (float *) image, FFTW_ESTIMATE);
                         }
+                        cc3[thread_id] += GetTime() - tt0;
+                        tt0 = GetTime();
 
                         fftwf_execute(plan_ifft);
+                        cc4[thread_id] += GetTime() - tt0;
+                        tt0 = GetTime();
 #pragma omp critical
                         {
                             fftwf_destroy_plan(plan_ifft);
                         }
+                        cc5[thread_id] += GetTime() - tt0;
+                        tt0 = GetTime();
+
 
                         for (int i = 0; i < Nx2 * Ny; i++)image[i] = image[i] / (Nx * Ny);
                         n_zz_thread[thread_id]++;
+                        cc6[thread_id] += GetTime() - tt0;
                     }
+
+                    double mx0 = 0;
+                    double mx1 = 0;
+                    double mx2 = 0;
+                    double mx3 = 0;
+                    double mx4 = 0;
+                    double mx5 = 0;
+                    double mx6 = 0;
+
                     for (int i = 0; i < threadNumber; i++) {
                         n_zz += n_zz_thread[i];
+                        mx0 = max(mx0, cc0[i]);
+                        mx1 = max(mx1, cc1[i]);
+                        mx2 = max(mx2, cc2[i]);
+                        tcost3 += cc3[i];
+                        mx4 = max(mx4, cc4[i]);
+                        tcost5 += cc5[i];
+                        mx6 = max(mx6, cc6[i]);
                     }
+                    tcost0 += mx0;
+                    tcost1 += mx1;
+                    tcost2 += mx2;
+                    tcost4 += mx4;
+                    tcost6 += mx6;
+
                     delete[] bufc_pre;
 
 
@@ -1024,6 +1190,7 @@ last cost 0.00014
                             double B = (k - z_orig_offset) * theta_rad_cos + z_orig_offset;
                             float C = -z_orig_offset + int(h_tilt_max / 2);
 
+
                             int i = li;
                             __m512d a_con = _mm512_set1_pd(A);
                             __m512d b_con = _mm512_set1_pd(B);
@@ -1033,7 +1200,8 @@ last cost 0.00014
                             __m512 eps_con = _mm512_set1_ps(1 - eps);
                             __m512 c_con = _mm512_set1_ps(C);
                             __m512 d_step_con = _mm512_set1_ps(1.0 / defocus_step);
-                            __m512i idx = _mm512_set_epi32(li + 15, li + 14, li + 13, li + 12, li + 11, li + 10, li + 9,
+                            __m512i idx = _mm512_set_epi32(li + 15, li + 14, li + 13, li + 12, li + 11, li + 10,
+                                                           li + 9,
                                                            li + 8, li + 7, li + 6, li + 5, li + 4, li + 3, li + 2,
                                                            li + 1, li + 0);
                             __m512i nxy_con = _mm512_set1_epi32(Nx2 * Ny);
@@ -1182,7 +1350,8 @@ last cost 0.00014
 //                                }
 
                                 //int x1 = int(x_orig);
-                                __m512i x1 = _mm512_cvt_roundps_epi32(x_ori, _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
+                                __m512i x1 = _mm512_cvt_roundps_epi32(x_ori,
+                                                                      _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
 //                                if (cnt <= 10) {
 //                                    int tmp[16];
 //                                    _mm512_store_epi32(tmp, x1);
@@ -1454,6 +1623,7 @@ last cost 0.00014
                                         (coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x2];
                             }
 
+
                         }
                     }
                     t3 = GetTime();
@@ -1477,6 +1647,18 @@ last cost 0.00014
         printf("init and read cost %.3f\n", cost);
         printf("weight cost %.3f\n", cost0);
         printf("3DF cost %.3f\n", cost1);
+
+        printf("------------\n");
+        printf("3DF cost0 %.3f\n", tcost0);
+        printf("3DF cost1 %.3f\n", tcost1);
+        printf("3DF cost2 %.3f\n", tcost2);
+        printf("3DF cost3 %.3f\n", tcost3);
+        printf("3DF cost4 %.3f\n", tcost4);
+        printf("3DF cost5 %.3f\n", tcost5);
+        printf("3DF cost6 %.3f\n", tcost6);
+        printf("------------\n");
+
+
         printf("reconstruction cost %.3f\n", cost2);
         printf("free cost %.3f\n", cost3);
 
