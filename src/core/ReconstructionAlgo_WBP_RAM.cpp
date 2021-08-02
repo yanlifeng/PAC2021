@@ -1386,11 +1386,13 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //        printf("3DF cost6 %.3f\n", tcost6);
 //        printf("------------\n");
 
+        double t_write = GetTime();
         // write out final result
         cout << "Wrtie out final reconstruction result:" << endl;
         MRC stack_final(output_mrc.c_str(), "wb");
         stack_final.createMRC_empty(stack_orig.getNx(), h, stack_orig.getNy(), 2); // (x,z,y)
         // loop: Ny (number of xz-slices)
+//#pragma omp parallel for num_threads(threadNumber)
         for (int j = 0; j < stack_orig.getNy(); j++) {
             stack_final.write2DIm(stack_recon[j], j);
         }
@@ -1439,6 +1441,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
         stack_final.close();
         cout << "Done" << endl;
+
+        printf("write part cost %.3f\n", GetTime() - t_write);
 
     }
 
