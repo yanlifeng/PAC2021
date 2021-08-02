@@ -22,7 +22,6 @@ set(CMAKE_MAKEFILE_DEPENDS
   "/Applications/CLion.app/Contents/bin/cmake/mac/share/cmake-3.17/Modules/Compiler/GNU-C.cmake"
   "/Applications/CLion.app/Contents/bin/cmake/mac/share/cmake-3.17/Modules/Compiler/GNU-CXX.cmake"
   "/Applications/CLion.app/Contents/bin/cmake/mac/share/cmake-3.17/Modules/Compiler/GNU.cmake"
-  "/Applications/CLion.app/Contents/bin/cmake/mac/share/cmake-3.17/Modules/ExternalProject.cmake"
   "/Applications/CLion.app/Contents/bin/cmake/mac/share/cmake-3.17/Modules/Internal/CMakeCheckCompilerFlag.cmake"
   "/Applications/CLion.app/Contents/bin/cmake/mac/share/cmake-3.17/Modules/Platform/Apple-GNU-C.cmake"
   "/Applications/CLion.app/Contents/bin/cmake/mac/share/cmake-3.17/Modules/Platform/Apple-GNU-CXX.cmake"
@@ -35,8 +34,6 @@ set(CMAKE_MAKEFILE_DEPENDS
   "CMakeFiles/3.17.5/CMakeCCompiler.cmake"
   "CMakeFiles/3.17.5/CMakeCXXCompiler.cmake"
   "CMakeFiles/3.17.5/CMakeSystem.cmake"
-  "FFTW-prefix/tmp/FFTW-cfgcmd.txt.in"
-  "../cmake/BuildFFTW.cmake"
   )
 
 # The corresponding makefile is:
@@ -47,7 +44,6 @@ set(CMAKE_MAKEFILE_OUTPUTS
 
 # Byproducts of CMake generate step:
 set(CMAKE_MAKEFILE_PRODUCTS
-  "FFTW-prefix/tmp/FFTW-cfgcmd.txt"
   "CMakeFiles/CMakeDirectoryInformation.cmake"
   )
 
@@ -57,5 +53,4 @@ set(CMAKE_DEPEND_INFO_FILES
   "CMakeFiles/tomo_cpu.dir/DependInfo.cmake"
   "CMakeFiles/util.dir/DependInfo.cmake"
   "CMakeFiles/core_CPU.dir/DependInfo.cmake"
-  "CMakeFiles/FFTW.dir/DependInfo.cmake"
   )

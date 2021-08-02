@@ -77,7 +77,6 @@ all: CMakeFiles/validate_cpu.dir/all
 all: CMakeFiles/tomo_cpu.dir/all
 all: CMakeFiles/util.dir/all
 all: CMakeFiles/core_CPU.dir/all
-all: CMakeFiles/FFTW.dir/all
 
 .PHONY : all
 
@@ -91,7 +90,6 @@ clean: CMakeFiles/validate_cpu.dir/clean
 clean: CMakeFiles/tomo_cpu.dir/clean
 clean: CMakeFiles/util.dir/clean
 clean: CMakeFiles/core_CPU.dir/clean
-clean: CMakeFiles/FFTW.dir/clean
 
 .PHONY : clean
 
@@ -99,16 +97,16 @@ clean: CMakeFiles/FFTW.dir/clean
 # Target rules for target CMakeFiles/validate_cpu.dir
 
 # All Build rule for target.
-CMakeFiles/validate_cpu.dir/all: CMakeFiles/core_CPU.dir/all
 CMakeFiles/validate_cpu.dir/all: CMakeFiles/util.dir/all
+CMakeFiles/validate_cpu.dir/all: CMakeFiles/core_CPU.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/validate_cpu.dir/build.make CMakeFiles/validate_cpu.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/validate_cpu.dir/build.make CMakeFiles/validate_cpu.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles --progress-num=22,23,24 "Built target validate_cpu"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles --progress-num=13,14 "Built target validate_cpu"
 .PHONY : CMakeFiles/validate_cpu.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/validate_cpu.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles 21
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles 12
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/validate_cpu.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles 0
 .PHONY : CMakeFiles/validate_cpu.dir/rule
@@ -127,16 +125,16 @@ CMakeFiles/validate_cpu.dir/clean:
 # Target rules for target CMakeFiles/tomo_cpu.dir
 
 # All Build rule for target.
-CMakeFiles/tomo_cpu.dir/all: CMakeFiles/core_CPU.dir/all
 CMakeFiles/tomo_cpu.dir/all: CMakeFiles/util.dir/all
+CMakeFiles/tomo_cpu.dir/all: CMakeFiles/core_CPU.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tomo_cpu.dir/build.make CMakeFiles/tomo_cpu.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tomo_cpu.dir/build.make CMakeFiles/tomo_cpu.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles --progress-num=17,18,19 "Built target tomo_cpu"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles --progress-num=9,10 "Built target tomo_cpu"
 .PHONY : CMakeFiles/tomo_cpu.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tomo_cpu.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles 21
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles 12
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tomo_cpu.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles 0
 .PHONY : CMakeFiles/tomo_cpu.dir/rule
@@ -158,7 +156,7 @@ CMakeFiles/tomo_cpu.dir/clean:
 CMakeFiles/util.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/util.dir/build.make CMakeFiles/util.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/util.dir/build.make CMakeFiles/util.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles --progress-num=20,21 "Built target util"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles --progress-num=11,12 "Built target util"
 .PHONY : CMakeFiles/util.dir/all
 
 # Build rule for subdir invocation for target.
@@ -182,15 +180,15 @@ CMakeFiles/util.dir/clean:
 # Target rules for target CMakeFiles/core_CPU.dir
 
 # All Build rule for target.
-CMakeFiles/core_CPU.dir/all: CMakeFiles/FFTW.dir/all
+CMakeFiles/core_CPU.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/core_CPU.dir/build.make CMakeFiles/core_CPU.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/core_CPU.dir/build.make CMakeFiles/core_CPU.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles --progress-num=9,10,11,12,13,14,15,16 "Built target core_CPU"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles --progress-num=1,2,3,4,5,6,7,8 "Built target core_CPU"
 .PHONY : CMakeFiles/core_CPU.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/core_CPU.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles 8
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/core_CPU.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles 0
 .PHONY : CMakeFiles/core_CPU.dir/rule
@@ -204,33 +202,6 @@ core_CPU: CMakeFiles/core_CPU.dir/rule
 CMakeFiles/core_CPU.dir/clean:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/core_CPU.dir/build.make CMakeFiles/core_CPU.dir/clean
 .PHONY : CMakeFiles/core_CPU.dir/clean
-
-#=============================================================================
-# Target rules for target CMakeFiles/FFTW.dir
-
-# All Build rule for target.
-CMakeFiles/FFTW.dir/all:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/FFTW.dir/build.make CMakeFiles/FFTW.dir/depend
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/FFTW.dir/build.make CMakeFiles/FFTW.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles --progress-num=1,2,3,4,5,6,7,8 "Built target FFTW"
-.PHONY : CMakeFiles/FFTW.dir/all
-
-# Build rule for subdir invocation for target.
-CMakeFiles/FFTW.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles 8
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/FFTW.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles 0
-.PHONY : CMakeFiles/FFTW.dir/rule
-
-# Convenience name for target.
-FFTW: CMakeFiles/FFTW.dir/rule
-
-.PHONY : FFTW
-
-# clean rule for target.
-CMakeFiles/FFTW.dir/clean:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/FFTW.dir/build.make CMakeFiles/FFTW.dir/clean
-.PHONY : CMakeFiles/FFTW.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.

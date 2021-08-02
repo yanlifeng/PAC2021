@@ -7,9 +7,21 @@
 -- FFTW_LIBRARIES : /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7/lib/libfftw3f.a;/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7/lib/libfftw3f_threads.a
 -- FFTW Path: /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7
 -- Configuring done
--- Generating done
--- Build files have been written to: /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug
-Cannot resolve compiler path 'icpc'
-Cannot resolve compiler path 'icpc'
-Cannot resolve compiler path 'icpc'
-Cannot resolve compiler path 'icpc'
+CMake Error at CMakeLists.txt:121 (add_executable):
+  Cannot find source file:
+
+    ../save.cpp
+
+  Tried extensions .c .C .c++ .cc .cpp .cxx .cu .m .M .mm .h .hh .h++ .hm
+  .hpp .hxx .in .txx
+
+
+CMake Error at CMakeLists.txt:121 (add_executable):
+  No SOURCES given to target: validate_cpu
+
+
+CMake Error at CMakeLists.txt:121 (add_executable):
+  No SOURCES given to target: tomo_cpu
+
+
+CMake Generate step failed.  Build files cannot be regenerated correctly.

@@ -80,15 +80,15 @@ include CMakeFiles/util.dir/flags.make
 CMakeFiles/util.dir/src/util/util.cpp.o: CMakeFiles/util.dir/flags.make
 CMakeFiles/util.dir/src/util/util.cpp.o: ../src/util/util.cpp
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/util.dir/src/util/util.cpp.o"
-	icpc  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/util.dir/src/util/util.cpp.o -c /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/util/util.cpp
+	/usr/local/Cellar/gcc@9/9.3.0_1/bin/g++-9  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/util.dir/src/util/util.cpp.o -c /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/util/util.cpp
 
 CMakeFiles/util.dir/src/util/util.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/util.dir/src/util/util.cpp.i"
-	icpc $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/util/util.cpp > CMakeFiles/util.dir/src/util/util.cpp.i
+	/usr/local/Cellar/gcc@9/9.3.0_1/bin/g++-9 $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/util/util.cpp > CMakeFiles/util.dir/src/util/util.cpp.i
 
 CMakeFiles/util.dir/src/util/util.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/util.dir/src/util/util.cpp.s"
-	icpc $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/util/util.cpp -o CMakeFiles/util.dir/src/util/util.cpp.s
+	/usr/local/Cellar/gcc@9/9.3.0_1/bin/g++-9 $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/util/util.cpp -o CMakeFiles/util.dir/src/util/util.cpp.s
 
 # Object files for target util
 util_OBJECTS = \

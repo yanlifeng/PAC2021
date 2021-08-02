@@ -4,14 +4,13 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp" "/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles/tomo_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.o"
   "/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/main/tomo.cpp" "/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles/tomo_cpu.dir/src/main/tomo.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "GNU")
 
 # The include file search paths:
 set(CMAKE_CXX_TARGET_INCLUDE_PATH
-  "../external/fftw-3.3.7/include"
+  "/home/PAC20217111/ylf/fftwTest/fftw/include"
   "../external/Eigen"
   "../src/include"
   )

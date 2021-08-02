@@ -1,5 +1,4 @@
 file(REMOVE_RECURSE
-  "CMakeFiles/tomo_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.o"
   "CMakeFiles/tomo_cpu.dir/src/main/tomo.cpp.o"
   "tomo_cpu"
   "tomo_cpu.pdb"

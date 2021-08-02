@@ -5,7 +5,7 @@
 		<Option title="TomoProject"/>
 		<Option makefile_is_custom="1"/>
 		<Option compiler="gcc"/>
-		<Option virtualFolders="CMake Files\;CMake Files\cmake\;CMake Files\cmake-build-debug\;CMake Files\cmake-build-debug\FFTW-prefix\;CMake Files\cmake-build-debug\FFTW-prefix\tmp\;"/>
+		<Option virtualFolders="CMake Files\;"/>
 		<Build>
 			<Target title="all">
 				<Option working_dir="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug"/>
@@ -44,7 +44,7 @@
 				<Option type="1"/>
 				<Option compiler="gcc"/>
 				<Compiler>
-					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7/include"/>
+					<Add directory="/home/PAC20217111/ylf/fftwTest/fftw/include"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/Eigen"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/include"/>
 					<Add directory="/usr/local/Cellar/gcc@9/9.3.0_1/lib/gcc/9/gcc/x86_64-apple-darwin20/9.3.0/../../../../../../include/c++/9.3.0"/>
@@ -69,7 +69,7 @@
 				<Option type="1"/>
 				<Option compiler="gcc"/>
 				<Compiler>
-					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7/include"/>
+					<Add directory="/home/PAC20217111/ylf/fftwTest/fftw/include"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/Eigen"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/include"/>
 					<Add directory="/usr/local/Cellar/gcc@9/9.3.0_1/lib/gcc/9/gcc/x86_64-apple-darwin20/9.3.0/../../../../../../include/c++/9.3.0"/>
@@ -94,7 +94,7 @@
 				<Option type="1"/>
 				<Option compiler="gcc"/>
 				<Compiler>
-					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7/include"/>
+					<Add directory="/home/PAC20217111/ylf/fftwTest/fftw/include"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/Eigen"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/include"/>
 					<Add directory="/usr/local/Cellar/gcc@9/9.3.0_1/lib/gcc/9/gcc/x86_64-apple-darwin20/9.3.0/../../../../../../include/c++/9.3.0"/>
@@ -119,7 +119,7 @@
 				<Option type="1"/>
 				<Option compiler="gcc"/>
 				<Compiler>
-					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7/include"/>
+					<Add directory="/home/PAC20217111/ylf/fftwTest/fftw/include"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/Eigen"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/include"/>
 					<Add directory="/usr/local/Cellar/gcc@9/9.3.0_1/lib/gcc/9/gcc/x86_64-apple-darwin20/9.3.0/../../../../../../include/c++/9.3.0"/>
@@ -144,7 +144,7 @@
 				<Option type="2"/>
 				<Option compiler="gcc"/>
 				<Compiler>
-					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7/include"/>
+					<Add directory="/home/PAC20217111/ylf/fftwTest/fftw/include"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/Eigen"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/include"/>
 					<Add directory="/usr/local/Cellar/gcc@9/9.3.0_1/lib/gcc/9/gcc/x86_64-apple-darwin20/9.3.0/../../../../../../include/c++/9.3.0"/>
@@ -169,7 +169,7 @@
 				<Option type="2"/>
 				<Option compiler="gcc"/>
 				<Compiler>
-					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7/include"/>
+					<Add directory="/home/PAC20217111/ylf/fftwTest/fftw/include"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/Eigen"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/include"/>
 					<Add directory="/usr/local/Cellar/gcc@9/9.3.0_1/lib/gcc/9/gcc/x86_64-apple-darwin20/9.3.0/../../../../../../include/c++/9.3.0"/>
@@ -194,7 +194,7 @@
 				<Option type="2"/>
 				<Option compiler="gcc"/>
 				<Compiler>
-					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7/include"/>
+					<Add directory="/home/PAC20217111/ylf/fftwTest/fftw/include"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/Eigen"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/include"/>
 					<Add directory="/usr/local/Cellar/gcc@9/9.3.0_1/lib/gcc/9/gcc/x86_64-apple-darwin20/9.3.0/../../../../../../include/c++/9.3.0"/>
@@ -219,7 +219,7 @@
 				<Option type="2"/>
 				<Option compiler="gcc"/>
 				<Compiler>
-					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7/include"/>
+					<Add directory="/home/PAC20217111/ylf/fftwTest/fftw/include"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/Eigen"/>
 					<Add directory="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/include"/>
 					<Add directory="/usr/local/Cellar/gcc@9/9.3.0_1/lib/gcc/9/gcc/x86_64-apple-darwin20/9.3.0/../../../../../../include/c++/9.3.0"/>
@@ -232,16 +232,6 @@
 				</Compiler>
 				<MakeCommands>
 					<Build command="/usr/bin/make -j16 -f &quot;/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/Makefile&quot;  VERBOSE=1 core_CPU/fast"/>
-					<CompileFile command="/usr/bin/make -j16 -f &quot;/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
-					<Clean command="/usr/bin/make -j16 -f &quot;/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
-					<DistClean command="/usr/bin/make -j16 -f &quot;/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
-				</MakeCommands>
-			</Target>
-			<Target title="FFTW">
-				<Option working_dir="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug"/>
-				<Option type="4"/>
-				<MakeCommands>
-					<Build command="/usr/bin/make -j16 -f &quot;/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/Makefile&quot;  VERBOSE=1 FFTW"/>
 					<CompileFile command="/usr/bin/make -j16 -f &quot;/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
 					<Clean command="/usr/bin/make -j16 -f &quot;/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
 					<DistClean command="/usr/bin/make -j16 -f &quot;/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
@@ -278,18 +268,8 @@
 		<Unit filename="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/util/util.cpp">
 			<Option target="util"/>
 		</Unit>
-		<Unit filename="/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp">
-			<Option target="validate_cpu"/>
-			<Option target="tomo_cpu"/>
-		</Unit>
 		<Unit filename="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/CMakeLists.txt">
 			<Option virtualFolder="CMake Files\"/>
-		</Unit>
-		<Unit filename="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake/BuildFFTW.cmake">
-			<Option virtualFolder="CMake Files\cmake\"/>
-		</Unit>
-		<Unit filename="/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/FFTW-prefix/tmp/FFTW-cfgcmd.txt.in">
-			<Option virtualFolder="CMake Files\cmake-build-debug\FFTW-prefix\tmp\"/>
 		</Unit>
 	</Project>
 </CodeBlocks_project_file>

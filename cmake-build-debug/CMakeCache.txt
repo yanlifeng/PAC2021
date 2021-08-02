@@ -252,6 +252,12 @@ TomoProject_BINARY_DIR:STATIC=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/
 //Value Computed by CMake
 TomoProject_SOURCE_DIR:STATIC=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP
 
+//Whether to use intel compiler?
+USE_INTEL_COMPILER:BOOL=OFF
+
+//Whether to use intel fftw?
+USE_INTEL_FFTW:BOOL=OFF
+
 //Dependencies for the target
 core_CPU_LIB_DEPENDS:STATIC=general;/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7/lib/libfftw3f.a;general;/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/external/fftw-3.3.7/lib/libfftw3f_threads.a;
 

@@ -80,46 +80,29 @@ include CMakeFiles/validate_cpu.dir/flags.make
 CMakeFiles/validate_cpu.dir/src/main/validate.cpp.o: CMakeFiles/validate_cpu.dir/flags.make
 CMakeFiles/validate_cpu.dir/src/main/validate.cpp.o: ../src/main/validate.cpp
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/validate_cpu.dir/src/main/validate.cpp.o"
-	icpc  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/validate_cpu.dir/src/main/validate.cpp.o -c /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/main/validate.cpp
+	/usr/local/Cellar/gcc@9/9.3.0_1/bin/g++-9  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/validate_cpu.dir/src/main/validate.cpp.o -c /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/main/validate.cpp
 
 CMakeFiles/validate_cpu.dir/src/main/validate.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/validate_cpu.dir/src/main/validate.cpp.i"
-	icpc $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/main/validate.cpp > CMakeFiles/validate_cpu.dir/src/main/validate.cpp.i
+	/usr/local/Cellar/gcc@9/9.3.0_1/bin/g++-9 $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/main/validate.cpp > CMakeFiles/validate_cpu.dir/src/main/validate.cpp.i
 
 CMakeFiles/validate_cpu.dir/src/main/validate.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/validate_cpu.dir/src/main/validate.cpp.s"
-	icpc $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/main/validate.cpp -o CMakeFiles/validate_cpu.dir/src/main/validate.cpp.s
-
-CMakeFiles/validate_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.o: CMakeFiles/validate_cpu.dir/flags.make
-CMakeFiles/validate_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.o: /Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/validate_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.o"
-	icpc  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/validate_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.o -c /Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp
-
-CMakeFiles/validate_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/validate_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.i"
-	icpc $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp > CMakeFiles/validate_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.i
-
-CMakeFiles/validate_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/validate_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.s"
-	icpc $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp -o CMakeFiles/validate_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.s
+	/usr/local/Cellar/gcc@9/9.3.0_1/bin/g++-9 $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/zhaozhan/CLionProjects/pac2021_publish/WBP/src/main/validate.cpp -o CMakeFiles/validate_cpu.dir/src/main/validate.cpp.s
 
 # Object files for target validate_cpu
 validate_cpu_OBJECTS = \
-"CMakeFiles/validate_cpu.dir/src/main/validate.cpp.o" \
-"CMakeFiles/validate_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.o"
+"CMakeFiles/validate_cpu.dir/src/main/validate.cpp.o"
 
 # External object files for target validate_cpu
 validate_cpu_EXTERNAL_OBJECTS =
 
 validate_cpu: CMakeFiles/validate_cpu.dir/src/main/validate.cpp.o
-validate_cpu: CMakeFiles/validate_cpu.dir/Users/zhaozhan/CLionProjects/pac2021_publish/save.cpp.o
 validate_cpu: CMakeFiles/validate_cpu.dir/build.make
 validate_cpu: libcore_CPU.a
 validate_cpu: libutil.a
-validate_cpu: ../external/fftw-3.3.7/lib/libfftw3f.a
-validate_cpu: ../external/fftw-3.3.7/lib/libfftw3f_threads.a
 validate_cpu: CMakeFiles/validate_cpu.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable validate_cpu"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/Users/zhaozhan/CLionProjects/pac2021_publish/WBP/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable validate_cpu"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/validate_cpu.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

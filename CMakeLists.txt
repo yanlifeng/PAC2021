@@ -24,10 +24,10 @@ set(TomoProject_VERSION_ADDIT 20201014)
 
 #Get git commit
 execute_process(
-    COMMAND git rev-parse HEAD 
-    OUTPUT_VARIABLE COMMIT_VERSION 
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    OUTPUT_STRIP_TRAILING_WHITESPACE
+        COMMAND git rev-parse HEAD
+        OUTPUT_VARIABLE COMMIT_VERSION
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 message(STATUS "Welcome to TomoProject ${TomoProject_VERSION_MAJOR}.${TomoProject_VERSION_MINOR}.${TomoProject_VERSION_ADDIT}!")
 
@@ -61,7 +61,7 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "")
 endif("${CMAKE_BUILD_TYPE}" STREQUAL "")
 if("${CMAKE_BUILD_TYPE}" STREQUAL "release")
     set(COMMON_FLAGS "${COMMON_FLAGS} -qopenmp -O3 -fast-transcendentals -fp-model precise")
-	# -xHost -fast-transcendentals -fma -L/home/PAC20217111/intel/oneapi/mkl/latest/lib/intel64 -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -liomp5 -ldl
+    # -xHost -fast-transcendentals -fma -L/home/PAC20217111/intel/oneapi/mkl/latest/lib/intel64 -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -liomp5 -ldl
     message(STATUS "CMAKE_BUILD_TYPE : ${CMAKE_BUILD_TYPE}, compile ${CMAKE_PROJECT_NAME} with ${COMMON_FLAGS} flag.")
 elseif("${CMAKE_BUILD_TYPE}" STREQUAL "debug")
     #TODO 拆成additional_flags
@@ -105,22 +105,22 @@ include_directories(${CMAKE_SOURCE_DIR}/src/include)
 if("${CPU_VERSION}")
 
 
-	file(GLOB_RECURSE CORE_SOURCES ${CMAKE_SOURCE_DIR}/src/core/*.cpp)
-	add_library(core_CPU STATIC ${CORE_SOURCES})
-	add_dependencies(core_CPU FFTW)
-	target_link_libraries(core_CPU PUBLIC ${FFTW_LIBRARIES})
+    file(GLOB_RECURSE CORE_SOURCES ${CMAKE_SOURCE_DIR}/src/core/*.cpp)
+    add_library(core_CPU STATIC ${CORE_SOURCES})
+    add_dependencies(core_CPU FFTW)
+    target_link_libraries(core_CPU PUBLIC ${FFTW_LIBRARIES})
 
-	file(GLOB_RECURSE UTIL_SOURCES ${CMAKE_SOURCE_DIR}/src/util/*.cpp)
-	add_library(util STATIC ${UTIL_SOURCES})
-	
-	file(GLOB_RECURSE MAIN_SOURCES ${CMAKE_SOURCE_DIR}/src/main/*.cpp)
+    file(GLOB_RECURSE UTIL_SOURCES ${CMAKE_SOURCE_DIR}/src/util/*.cpp)
+    add_library(util STATIC ${UTIL_SOURCES})
 
-	foreach(MAINSRC ${MAIN_SOURCES})
-	    get_filename_component(MAINNAME ${MAINSRC} NAME_WE) # file name without directories or longest extension
-		set(MAINNAME "${MAINNAME}_cpu")
-	    add_executable(${MAINNAME} ${MAINSRC} ../save.cpp)
-	    target_link_libraries(${MAINNAME} PUBLIC core_CPU util  ${FFTW_LIBRARIES})
-	endforeach()
+    file(GLOB_RECURSE MAIN_SOURCES ${CMAKE_SOURCE_DIR}/src/main/*.cpp)
+
+    foreach(MAINSRC ${MAIN_SOURCES})
+        get_filename_component(MAINNAME ${MAINSRC} NAME_WE) # file name without directories or longest extension
+        set(MAINNAME "${MAINNAME}_cpu")
+        add_executable(${MAINNAME} ${MAINSRC} ../save.cpp)
+        target_link_libraries(${MAINNAME} PUBLIC core_CPU util  ${FFTW_LIBRARIES})
+    endforeach()
 
 endif("${CPU_VERSION}")
 
