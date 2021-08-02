@@ -94,6 +94,7 @@ public:
 
     int readnPixels(void *buf, int nimage, int nline, int npixel, int n);
 
+    int write2DImAll(void *buf, int n);
     int write2DIm(void *buf, int n);
 
     int writeLine(void *buf, int nimage, int nline);

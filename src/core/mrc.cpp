@@ -259,6 +259,17 @@ int MRC::readGainInHeader(float *buf) {
 }
 
 
+int MRC::write2DImAll(void *buf, int n) {
+    size_t ImSize = (size_t) getImSize();
+    size_t offset = 1024 + getSymdatasize() + (size_t) n * ImSize;
+
+    if (fseek(m_fp, offset, SEEK_SET) != 0) {
+        return 0;
+    }
+
+    return fwrite(buf, 1, ImSize, m_fp);
+}
+
 int MRC::write2DIm(void *buf, int n) {
     size_t ImSize = (size_t) getImSize();
     size_t offset = 1024 + getSymdatasize() + (size_t) n * ImSize;

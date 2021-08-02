@@ -604,22 +604,40 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //        double tcost6 = 0;
 
 
-        t0 = GetTime();
 
         cout << "range " << stack_orig.getNx() << " " << stack_orig.getNy() << " " << stack_orig.getNz() << endl;
+        t0 = GetTime();
 
         fftwf_init_threads();
-
+        fftwf_plan_with_nthreads(1);
         int Nx = stack_orig.getNx();
         int Ny = stack_orig.getNy();
         int Nx2 = Nx + 2 - Nx % 2;
         int Nxh = Nx / 2 + 1;
         int Nyh = Ny / 2 + 1;
         int Nyh2 = (Ny + 1) / 2;
-        float *stack_corrected = new float[(int(h_tilt_max / defocus_step) + 1) * Nx2 * Ny];
+        int Nzz = (int(h_tilt_max / defocus_step) + 1);
+        float *stack_corrected = new float[Nzz * Nx2 * Ny];
 
+        float *atan_xy = new float[Ny * Nx];
+        float *sin_atan_xy = new float[Ny * Nx];
+        float *cos_atan_xy = new float[Ny * Nx];
+#pragma omp parallel for num_threads(threadNumber)
+        for (int j = 1; j < Ny; j++) {
+            for (int i = 1; i < Nx; i++) {
+                float x_norm = i;
+                float y_norm = (j >= Nyh) ? (j - Ny) : (j);
+                float x_real = float(x_norm) / float(Nx) * (1 / pix);
+                float y_real = float(y_norm) / float(Ny) * (1 / pix);
+                float alpha = atan(y_real / x_real);
+                atan_xy[j * Nx + i] = alpha;
+//                            sin_atan_xy[j * Nx + i] = sin(2 * alpha);
+//                            cos_atan_xy[j * Nx + i] = cos(2 * alpha);
 
+            }
+        }
         int *mak_pre = new int[1 << 8];
+#pragma omp parallel for num_threads(threadNumber)
         for (int i = 0; i < (1 << 8); i++) {
             mak_pre[i] = 0;
             int now = 0;
@@ -634,17 +652,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                 }
             }
             mak_pre[i] = now;
-//            printf("pre is :\n");
-//            for (int j = 0; j < 8; j++) {
-//                printf("%d ", (i >> j) & 1);
-//            }
-//            printf("now is :\n");
-//            for (int j = 0; j < 16; j++) {
-//                printf("%d ", (now >> j) & 1);
-//            }
         }
-//        cout << endl;
-//        exit(0);
+
 
         for (int n = 0; n < stack_orig.getNz(); n++)   // loop for every micrograph
         {
@@ -656,9 +665,6 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
             double theta_rad_sin = sin(theta_rad);
             float *image_now = new float[stack_orig.getNx() * stack_orig.getNy()];
             stack_orig.read2DIm_32bit(image_now, n);
-            float *image_now_backup = new float[stack_orig.getNx() * stack_orig.getNy()];
-            memcpy(image_now_backup, image_now, sizeof(float) * stack_orig.getNx() * stack_orig.getNy());
-
             t3 = GetTime();
             cost0 += t3 - t2;
 
@@ -797,7 +803,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     t2 = GetTime();
 //                    float *stack_corrected[int(h_tilt_max / defocus_step) + 1]; // 第一维遍历不同高度，第二维x，第三维y
                     int n_zz = 0;
-                    fftwf_plan_with_nthreads(4);
+                    fftwf_plan_with_nthreads(8);
 
 
                     // weighting
@@ -840,24 +846,6 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
                     double a_w_cos = acos(w_cos);
 
-                    float *atan_xy = new float[Ny * Nx];
-                    float *sin_atan_xy = new float[Ny * Nx];
-                    float *cos_atan_xy = new float[Ny * Nx];
-#pragma omp parallel for num_threads(threadNumber)
-                    for (int j = 1; j < Ny; j++) {
-                        for (int i = 1; i < Nx; i++) {
-                            float x_norm = i;
-                            float y_norm = (j >= Nyh) ? (j - Ny) : (j);
-                            float x_real = float(x_norm) / float(Nx) * (1 / pix);
-                            float y_real = float(y_norm) / float(Ny) * (1 / pix);
-                            float alpha = atan(y_real / x_real);
-                            atan_xy[j * Nx + i] = alpha;
-//                            sin_atan_xy[j * Nx + i] = sin(2 * alpha);
-//                            cos_atan_xy[j * Nx + i] = cos(2 * alpha);
-
-                        }
-                    }
-
                     t3 = GetTime();
                     cost2_5 += t3 - t2;
                     t2 = GetTime();
@@ -877,6 +865,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
 #pragma omp parallel for num_threads(threadNumber)
                     for (int zz = zl; zz < zr; zz += defocus_step) {
+
                         int thread_id = omp_get_thread_num();
 
 
@@ -885,7 +874,6 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                         CTF ctf = ctf_para[n];
                         float z_offset = float(zz) + float(defocus_step - 1) / 2;
                         memcpy(image, bufc_pre, sizeof(float) * (Nx2 * Ny));
-
 
                         float defocus1 = ctf.defocus1;
                         float defocus2 = ctf.defocus2;
@@ -1018,7 +1006,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //                                                                             sin_atan_xy[j * Nx + i] * sin2ast)) / 2.0;
                                 //TODO is float(cos) right?
 //                                    float df_now = (A + (defocus1 - defocus2) * float(cos(2 * (alpha - astig)))) * 0.5;
-                                __m512 cos_tmp = _mm512_cosh_ps(
+                                __m512 cos_tmp = _mm512_cos_ps(
                                         _mm512_mul_ps(two_con, _mm512_sub_ps(alpha, astig_con)));
 //                                __m512 cos_tmp = _mm512_set1_ps(0);
                                 //TODO why _mm512_cosh_ps get wrong answer
@@ -1354,7 +1342,6 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                 }
             }
             delete[] image_now;
-            delete[] image_now_backup;
             printf("image %d cost %.3f\n", n, GetTime() - t1);
         }
 
@@ -1387,59 +1374,115 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //        printf("------------\n");
 
         double t_write = GetTime();
+        double tw = GetTime();
         // write out final result
         cout << "Wrtie out final reconstruction result:" << endl;
         MRC stack_final(output_mrc.c_str(), "wb");
         stack_final.createMRC_empty(stack_orig.getNx(), h, stack_orig.getNy(), 2); // (x,z,y)
         // loop: Ny (number of xz-slices)
 //#pragma omp parallel for num_threads(threadNumber)
+
         for (int j = 0; j < stack_orig.getNy(); j++) {
             stack_final.write2DIm(stack_recon[j], j);
         }
 
-        // update MRC header
-        int threads = 3;
-        float min_thread[threads], max_thread[threads];
-        double mean_thread[threads];
-        for (int th = 0; th < threads; th++) {
-            min_thread[th] = stack_recon[0][0];
-            max_thread[th] = stack_recon[0][0];
-            mean_thread[th] = 0.0;
-        }
+        printf("write t1 cost %.3f\n", GetTime() - tw);
+        tw = GetTime();
 
+
+//        // update MRC header
+//        float min_thread[threadNumber], max_thread[threadNumber];
+//        double mean_thread[threadNumber];
+//        for (int th = 0; th < threadNumber; th++) {
+//            min_thread[th] = stack_recon[0][0];
+//            max_thread[th] = stack_recon[0][0];
+//            mean_thread[th] = 0.0;
+//        }
+//
+//
+//        printf("write t2 cost %.3f\n", GetTime() - tw);
+//        tw = GetTime();
+//
+//#pragma omp parallel for num_threads(threadNumber)
+//        for (int j = 0; j < stack_orig.getNy(); j++) {
+//            double mean_now = 0.0;
+//            float mis = stack_recon[j][0];
+//            float mxs = stack_recon[j][0];
+//            int tid = omp_get_thread_num();
+//            for (int i = 0; i < stack_orig.getNx() * h; i++) {
+//                mean_now += stack_recon[j][i];
+//                mis = min(mis, stack_recon[j][i]);
+//                mxs = max(mxs, stack_recon[j][i]);
+//            }
+//            min_thread[tid] = min(min_thread[tid], mis);
+//            max_thread[tid] = max(max_thread[tid], mis);
+//            mean_thread[tid] += (mean_now / (stack_orig.getNx() * h));
+//        }
+//
+//        printf("write t3 cost %.3f\n", GetTime() - tw);
+//        tw = GetTime();
+//        float min_all = min_thread[0];
+//        float max_all = max_thread[0];
+//        double mean_all = 0;
+//        for (int th = 0; th < threadNumber; th++) {
+//            mean_all += mean_thread[th];
+//            if (min_all > min_thread[th]) {
+//                min_all = min_thread[th];
+//            }
+//            if (max_all < max_thread[th]) {
+//                max_all = max_thread[th];
+//            }
+//        }
+
+
+        float min_thread, max_thread;
+        double mean_thread;
+        min_thread = stack_recon[0][0];
+        max_thread = stack_recon[0][0];
+        mean_thread = 0.0;
+
+#pragma omp parallel for num_threads(threadNumber)
         for (int j = 0; j < stack_orig.getNy(); j++) {
             double mean_now = 0.0;
+            float mis = stack_recon[j][0];
+            float mxs = stack_recon[j][0];
+
             for (int i = 0; i < stack_orig.getNx() * h; i++) {
                 mean_now += stack_recon[j][i];
-                if (min_thread[j % threads] > stack_recon[j][i]) {
-                    min_thread[j % threads] = stack_recon[j][i];
-                }
-                if (max_thread[j % threads] < stack_recon[j][i]) {
-                    max_thread[j % threads] = stack_recon[j][i];
-                }
+                mis = min(mis, stack_recon[j][i]);
+                mxs = max(mxs, stack_recon[j][i]);
             }
-            mean_thread[j % threads] += (mean_now / (stack_orig.getNx() * h));
+#pragma omp critical
+            {
+                min_thread = min(min_thread, mis);
+                max_thread = max(max_thread, mxs);
+                mean_thread += (mean_now / (stack_orig.getNx() * h));
+            }
+
         }
-        float min_all = min_thread[0];
-        float max_all = max_thread[0];
-        double mean_all = 0;
-        for (int th = 0; th < threads; th++) {
-            mean_all += mean_thread[th];
-            if (min_all > min_thread[th]) {
-                min_all = min_thread[th];
-            }
-            if (max_all < max_thread[th]) {
-                max_all = max_thread[th];
-            }
-        }
+        float min_all = min_thread;
+        float max_all = max_thread;
+        double mean_all = mean_thread;
+
+
+//        printf("%.7f %.7f %.7f\n", min_all, max_all, mean_all);
+
+        printf("write t4 cost %.3f\n", GetTime() - tw);
+        tw = GetTime();
         mean_all /= stack_orig.getNy();
         stack_final.computeHeader(pix, false, min_all, max_all, float(mean_all));
 
+        printf("write t5 cost %.3f\n", GetTime() - tw);
+        tw = GetTime();
         for (int j = 0; j < stack_orig.getNy(); j++) {
             delete[] stack_recon[j];
         }
 
-        stack_final.close();
+        printf("write t6 cost %.3f\n", GetTime() - tw);
+        tw = GetTime();
+//        stack_final.close();
+        printf("write t7 cost %.3f\n", GetTime() - tw);
+        tw = GetTime();
         cout << "Done" << endl;
 
         printf("write part cost %.3f\n", GetTime() - t_write);
