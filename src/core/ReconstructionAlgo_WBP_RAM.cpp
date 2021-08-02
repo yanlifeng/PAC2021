@@ -1006,6 +1006,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //                                                                             sin_atan_xy[j * Nx + i] * sin2ast)) / 2.0;
                                 //TODO is float(cos) right?
 //                                    float df_now = (A + (defocus1 - defocus2) * float(cos(2 * (alpha - astig)))) * 0.5;
+                                //TODO g++ include this function
                                 __m512 cos_tmp = _mm512_cos_ps(
                                         _mm512_mul_ps(two_con, _mm512_sub_ps(alpha, astig_con)));
 //                                __m512 cos_tmp = _mm512_set1_ps(0);
@@ -1208,7 +1209,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                                            li + 8, li + 7, li + 6, li + 5, li + 4, li + 3, li + 2,
                                                            li + 1, li + 0);
 
-
+//                            cout << "111" << endl;
 //                            static int cnt = 100;
 //                            bool checcc = 0;
                             for (; i + 16 <= ri + 1; i += 16) {
@@ -1221,6 +1222,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
                                 //i - x_orig_offset
                                 __m512 sub_tmp = _mm512_sub_ps(_mm512_cvtepi32_ps(idx), offset_con);
+//                                cout << "111" << endl;
 
 
 
@@ -1239,6 +1241,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 x_ori = _mm512_insertf32x8(x_ori, _mm512_cvtpd_ps(x_tmp1), 1);
 
 
+//                                cout << "111" << endl;
 
                                 // sub_tmp * theta_rad_sin + B
                                 __m512d z_tmp0 = _mm512_add_pd(_mm512_mul_pd(d0, sin_con), b_con);
@@ -1256,6 +1259,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 __m512i x2 = _mm512_cvt_roundps_epi32(_mm512_add_ps(x_ori, eps_con),
                                                                       _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
 
+//                                cout << "111" << endl;
 
 
                                 //float coeff = x_orig - x1;
@@ -1270,6 +1274,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                                                        _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
 
 
+//                                cout << "111" << endl;
 
 
                                 //cal  n_z * Nx2 * Ny + j * Nx2
@@ -1294,21 +1299,28 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
                                 //(1 - coeff) * stack_corrected[n_z][j * Nx2 + x1]
                                 __m512 c0 = _mm512_mul_ps(_mm512_sub_ps(one_con, coeff), cc0);
+//                                cout << "222" << endl;
 
 
                                 //(coeff) * stack_corrected[n_z][j * Nx2 + x2]
                                 __m512 c1 = _mm512_mul_ps(coeff, cc1);
+//                                cout << "222" << endl;
 
 
                                 float *p_now = stack_recon[j] + k * Nx + i;
-                                __m512 tmplod = _mm512_load_ps(p_now);
+                                __m512 tmplod = _mm512_loadu_ps(p_now);
+//                                cout << "333" << endl;
 
                                 //last baba
                                 __m512 resss = _mm512_add_ps(_mm512_add_ps(c0, c1), tmplod);
-                                _mm512_store_ps(p_now, resss);
+//                                cout << "444" << endl;
 
+                                _mm512_storeu_ps(p_now, resss);
+
+//                                cout << "555" << endl;
 
                                 idx = _mm512_add_epi32(idx, si_con);
+//                                cout << "666" << endl;
 
 //                                exit(0);
 //                                cout << "333" << endl;
