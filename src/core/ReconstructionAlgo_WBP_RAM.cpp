@@ -29,7 +29,7 @@
 
 #define mycos(x) (1-x*x/2+x*x*x*x/24)
 
-const int threadNumber = 1;
+const int threadNumber = 64;
 
 const float eps = 1e-7;
 
@@ -43,11 +43,11 @@ double GetTime() {
 static void buf2fft(float *buf, float *fft, int nx, int ny) {
     int nxb = nx + 2 - nx % 2;
     int i;
-//#pragma omp parallel for num_threads(threadNumber)
+#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < (nx + 2 - nx % 2) * ny; i++) {
         fft[i] = 0.0;
     }
-//#pragma omp parallel for num_threads(threadNumber)
+#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < ny; i++) {
         memcpy(fft + i * nxb, buf + i * nx, sizeof(float) * nx);
     }
@@ -68,11 +68,11 @@ static void buf2fft_padding_1D(float *buf, float *fft, int nx_orig, int nx_final
     int nxb = nx_final + 2 - nx_final % 2;
     int nxp = nx_final - nx_orig + 1;
     int i, j;
-//#pragma omp parallel for num_threads(threadNumber)
+#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < (nx_final + 2 - nx_final % 2) * ny_final; i++) {
         fft[i] = 0.0;
     }
-//#pragma omp parallel for num_threads(threadNumber)
+#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < ny_orig; i++) {
         memcpy(fft + i * nxb, buf + i * nx_orig, sizeof(float) * nx_orig);
         for (j = nx_orig; j < nx_final; j++)    // padding for continuity (FFT本质是周期延拓后做DFT，将首尾连接以保证连续性)
@@ -86,11 +86,11 @@ static void buf2fft_padding_1D(float *buf, float *fft, int nx_orig, int nx_final
 static void fft2buf_padding_1D(float *buf, float *fft, int nx_orig, int nx_final, int ny_orig, int ny_final) {
     int nxb = nx_final + 2 - nx_final % 2;
     int i;
-//#pragma omp parallel for num_threads(threadNumber)
+#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < nx_orig * ny_orig; i++) {
         buf[i] = 0.0;
     }
-//#pragma omp parallel for num_threads(threadNumber)
+#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < ny_orig; i++) {
         memcpy(buf + i * nx_orig, fft + i * nxb, sizeof(float) * nx_orig);
     }
@@ -146,17 +146,12 @@ static void filter_weighting_1D_many(float *data, int Nx, int Ny, float radial, 
     fftwf_plan plan_fft, plan_ifft;
     float *bufc = new float[(Nx_final + 2 - Nx_final % 2) * Ny];
 
-#pragma omp critical
-    {
-
-        plan_fft = fftwf_plan_many_dft_r2c(1, &Nx_final, Ny, (float *) bufc, NULL, 1, (Nx_final + 2 - Nx_final % 2),
-                                           reinterpret_cast<fftwf_complex *>(bufc), NULL, 1,
-                                           (Nx_final + 2 - Nx_final % 2) / 2, FFTW_ESTIMATE);
-        plan_ifft = fftwf_plan_many_dft_c2r(1, &Nx_final, Ny, reinterpret_cast<fftwf_complex *>(bufc), NULL, 1,
-                                            (Nx_final + 2 - Nx_final % 2) / 2, (float *) bufc, NULL, 1,
-                                            (Nx_final + 2 - Nx_final % 2), FFTW_ESTIMATE);
-
-    }
+    plan_fft = fftwf_plan_many_dft_r2c(1, &Nx_final, Ny, (float *) bufc, NULL, 1, (Nx_final + 2 - Nx_final % 2),
+                                       reinterpret_cast<fftwf_complex *>(bufc), NULL, 1,
+                                       (Nx_final + 2 - Nx_final % 2) / 2, FFTW_ESTIMATE);
+    plan_ifft = fftwf_plan_many_dft_c2r(1, &Nx_final, Ny, reinterpret_cast<fftwf_complex *>(bufc), NULL, 1,
+                                        (Nx_final + 2 - Nx_final % 2) / 2, (float *) bufc, NULL, 1,
+                                        (Nx_final + 2 - Nx_final % 2), FFTW_ESTIMATE);
 
     buf2fft_padding_1D(data, bufc, Nx, Nx_final, Ny, Ny);
 
@@ -165,7 +160,7 @@ static void filter_weighting_1D_many(float *data, int Nx, int Ny, float radial, 
     int radial_Nx = int(floor((Nx_final) * radial));
     float sigma_Nx = float(Nx_final) * sigma;
     // loop: Ny (all Fourier components for y-axis)
-//#pragma omp parallel for num_threads(threadNumber)
+#pragma omp parallel for num_threads(threadNumber)
     for (int j = 0; j < Ny; j++) {
         // loop: Nx_final+2-Nx_final%2 (all Fourier components for x-axis)
         for (int i = 0; i < Nx_final + 2 - Nx_final % 2; i += 2) {
@@ -191,17 +186,14 @@ static void filter_weighting_1D_many(float *data, int Nx, int Ny, float radial, 
 
     fftwf_execute(plan_ifft);
     fft2buf_padding_1D(data, bufc, Nx, Nx_final, Ny, Ny);
-//#pragma omp parallel for num_threads(threadNumber)
+#pragma omp parallel for num_threads(threadNumber)
     for (int i = 0; i < Nx * Ny; i++)   // normalization
     {
         data[i] /= Nx;
     }
-#pragma omp critical
-    {
-        fftwf_destroy_plan(plan_fft);
-        fftwf_destroy_plan(plan_ifft);
-    }
 
+    fftwf_destroy_plan(plan_fft);
+    fftwf_destroy_plan(plan_ifft);
     delete[] bufc;
 }
 
@@ -577,19 +569,13 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
     {
         cout << "Using rotated stack" << endl;
 
-        printf("now range %d %d %d %lld\n", stack_orig.getNx(), stack_orig.getNy(), h,
-               (1ll * stack_orig.getNx() * stack_orig.getNy() * h));
-
-        float *stack_recon[threadNumber][stack_orig.getNy()]; // (x,z,y)
-        for (int tid = 0; tid < threadNumber; tid++) {
-            for (int j = 0; j < stack_orig.getNy(); j++) {
-                stack_recon[tid][j] = new float[stack_orig.getNx() * h];
-                for (int i = 0; i < stack_orig.getNx() * h; i++) {
-                    stack_recon[tid][j][i] = 0.0;
-                }
+        float *stack_recon[stack_orig.getNy()]; // (x,z,y)
+        for (int j = 0; j < stack_orig.getNy(); j++) {
+            stack_recon[j] = new float[stack_orig.getNx() * h];
+            for (int i = 0; i < stack_orig.getNx() * h; i++) {
+                stack_recon[j][i] = 0.0;
             }
         }
-
 
         cout << "Start reconstruction:" << endl;
         float x_orig_offset = float(stack_orig.getNx()) / 2.0, z_orig_offset = float(h) / 2.0;
@@ -636,7 +622,6 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         float *atan_xy = new float[Ny * Nx];
         float *sin_atan_xy = new float[Ny * Nx];
         float *cos_atan_xy = new float[Ny * Nx];
-
 #pragma omp parallel for num_threads(threadNumber)
         for (int j = 1; j < Ny; j++) {
             for (int i = 1; i < Nx; i++) {
@@ -669,23 +654,19 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
             mak_pre[i] = now;
         }
 
-#pragma omp parallel for num_threads(threadNumber)
+
         for (int n = 0; n < stack_orig.getNz(); n++)   // loop for every micrograph
         {
-            int tid = omp_get_thread_num();
             t1 = GetTime();
-//            t2 = GetTime();
-//            cout << "Image " << n << ":" << endl;
+            t2 = GetTime();
+            cout << "Image " << n << ":" << endl;
             float theta_rad = theta[n] / 180 * M_PI;
             double theta_rad_cos = cos(theta_rad);
             double theta_rad_sin = sin(theta_rad);
             float *image_now = new float[stack_orig.getNx() * stack_orig.getNy()];
-#pragma omp critical
-            {
-                stack_orig.read2DIm_32bit(image_now, n);
-            }
-//            t3 = GetTime();
-//            cost0 += t3 - t2;
+            stack_orig.read2DIm_32bit(image_now, n);
+            t3 = GetTime();
+            cost0 += t3 - t2;
 
             if (skip_ctfcorrection)  // no correction, simple (W)BP
             {
@@ -736,7 +717,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     }
                     // loop: Nx*h (whole xz-slice)
                     for (int i = 0; i < stack_orig.getNx() * h; i++) {
-                        stack_recon[tid][j][i] += recon_now[i];
+                        stack_recon[j][i] += recon_now[i];
                     }
                 }
 
@@ -803,7 +784,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                         }
                         // loop: Nx*h (whole xz-slice)
                         for (int i = 0; i < stack_orig.getNx() * h; i++) {
-                            stack_recon[tid][j][i] += recon_now[i];
+                            stack_recon[j][i] += recon_now[i];
                         }
                     }
 
@@ -814,56 +795,48 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     cout << "\tDone" << endl;
                 } else    // perform 3D-CTF correction
                 {
-//                    cout << "\tPerform 3D-CTF correction!" << endl;
+                    cout << "\tPerform 3D-CTF correction!" << endl;
 
                     // write all corrected and weighted images in one mrc stack
-//                    cout << "\tPerform 3D correction & save corrected stack:" << endl;
+                    cout << "\tPerform 3D correction & save corrected stack:" << endl;
 
-//                    t2 = GetTime();
+                    t2 = GetTime();
 //                    float *stack_corrected[int(h_tilt_max / defocus_step) + 1]; // 第一维遍历不同高度，第二维x，第三维y
                     int n_zz = 0;
-//                    fftwf_plan_with_nthreads(8);
+                    fftwf_plan_with_nthreads(8);
 
 
                     // weighting
                     if (!skip_weighting) {
-//                        cout << "\tStart weighting..." << endl;
+                        cout << "\tStart weighting..." << endl;
 //                        printf("now fftw use %d\n", fftw_planner_nthreads());
 
                         filter_weighting_1D_many(image_now, stack_orig.getNx(), stack_orig.getNy(), weighting_radial,
                                                  weighting_sigma);
-//                        cout << "\tDone" << endl;
+                        cout << "\tDone" << endl;
                     }
-//                    t3 = GetTime();
-//                    cost1 += t3 - t2;
+                    t3 = GetTime();
+                    cost1 += t3 - t2;
 
                     // 3D-CTF correction
                     //hotspot 1
-//                    cout << "\tStart 3D-CTF correction..." << endl;
+                    cout << "\tStart 3D-CTF correction..." << endl;
 
                     //把第一波fft操作拿出来，预处理好放到bufc_pre中
                     float *bufc_pre = new float[(Nx + 2 - Nx % 2) * Ny];
-//                    t2 = GetTime();
-                    fftwf_plan plan_fft_pre;
-#pragma omp critical
-                    {
-                        plan_fft_pre = fftwf_plan_dft_r2c_2d(Ny, Nx, (float *) bufc_pre,
-                                                             reinterpret_cast<fftwf_complex *>(bufc_pre),
-                                                             FFTW_ESTIMATE);
-                    }
+                    t2 = GetTime();
 
+                    fftwf_plan plan_fft_pre = fftwf_plan_dft_r2c_2d(Ny, Nx, (float *) bufc_pre,
+                                                                    reinterpret_cast<fftwf_complex *>(bufc_pre),
+                                                                    FFTW_ESTIMATE);
                     buf2fft(image_now, bufc_pre, Nx, Ny);
                     fftwf_execute(plan_fft_pre);
-#pragma omp critical
-                    {
-                        fftwf_destroy_plan(plan_fft_pre);
+                    fftwf_destroy_plan(plan_fft_pre);
+                    fftwf_plan_with_nthreads(1);
 
-                    }
-//                    fftwf_plan_with_nthreads(1);
-
-//                    t3 = GetTime();
-//                    cost2 += t3 - t2;
-//                    t2 = GetTime();
+                    t3 = GetTime();
+                    cost2 += t3 - t2;
+                    t2 = GetTime();
                     int n_zz_thread[threadNumber];
                     for (int i = 0; i < threadNumber; i++) {
                         n_zz_thread[i] = 0;
@@ -873,28 +846,25 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
                     double a_w_cos = acos(w_cos);
 
-//                    t3 = GetTime();
-//                    cost2_5 += t3 - t2;
-//                    t2 = GetTime();
+                    t3 = GetTime();
+                    cost2_5 += t3 - t2;
+                    t2 = GetTime();
 
                     int nz_range = int(h_tilt_max / defocus_step) + 1;
                     fftwf_plan plan_ifft_omp[nz_range];
-#pragma omp critical
-                    {
-                        for (int i = 0; i < nz_range; i++) {
-                            float *image = stack_corrected + i * Nx2 * Ny;
-                            plan_ifft_omp[i] = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(image),
-                                                                     (float *) image, FFTW_ESTIMATE);
-                        }
+#pragma omp parallel for num_threads(threadNumber)
+                    for (int i = 0; i < nz_range; i++) {
+                        float *image = stack_corrected + i * Nx2 * Ny;
+                        plan_ifft_omp[i] = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(image),
+                                                                 (float *) image, FFTW_ESTIMATE);
                     }
 
+                    t3 = GetTime();
+                    cost3 += t3 - t2;
+                    t2 = GetTime();
 
-//                    t3 = GetTime();
-//                    cost3 += t3 - t2;
-//                    t2 = GetTime();
 
-
-//#pragma omp parallel for num_threads(threadNumber)
+#pragma omp parallel for num_threads(threadNumber)
                     for (int zz = zl; zz < zr; zz += defocus_step) {
 
                         int thread_id = omp_get_thread_num();
@@ -1016,109 +986,108 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                             __m512 y_real_con = _mm512_set1_ps(y_real);
 
                             int i = 1;
-//                            for (; i + 16 <= Nxh; i += 16) {
-//                                //float x_norm = i;
-//                                __m512 x_norm = _mm512_cvtepi32_ps(idx);
+                            for (; i + 16 <= Nxh; i += 16) {
+                                //float x_norm = i;
+                                __m512 x_norm = _mm512_cvtepi32_ps(idx);
+
+                                //float x_real = x_norm * div_Nx;
+                                __m512 x_real = _mm512_mul_ps(x_norm, div_con);
+
+                                //float alpha = atan_xy[j * Nx + i];
+                                __m512 alpha = _mm512_load_ps(atan_xy + j * Nx + i);
+
 //
-//                                //float x_real = x_norm * div_Nx;
-//                                __m512 x_real = _mm512_mul_ps(x_norm, div_con);
-//
-//                                //float alpha = atan_xy[j * Nx + i];
-//                                __m512 alpha = _mm512_load_ps(atan_xy + j * Nx + i);
-//
-////
-//                                //float freq2 = x_real * x_real + y_real * y_real;
-//                                __m512 freq2 = _mm512_add_ps(_mm512_mul_ps(x_real, x_real),
-//                                                             _mm512_mul_ps(y_real_con, y_real_con));
-//
-////                                float df_now = (A + (defocus1 - defocus2) * mycos(2 * (alpha - astig))) / 2.0;
-//                                //TODO defocus1 - defocus2 is too small that remove it can even pass check
-////                                float df_now = (A + (defocus1 - defocus2) * (cos_atan_xy[j * Nx + i] * cos2ast +
-////                                                                             sin_atan_xy[j * Nx + i] * sin2ast)) / 2.0;
-//                                //TODO is float(cos) right?
-////                                    float df_now = (A + (defocus1 - defocus2) * float(cos(2 * (alpha - astig)))) * 0.5;
-//                                //TODO g++ include this function
-//                                __m512 cos_tmp = _mm512_cos_ps(
-//                                        _mm512_mul_ps(two_con, _mm512_sub_ps(alpha, astig_con)));
-////                                __m512 cos_tmp = _mm512_set1_ps(0);
-//                                //TODO why _mm512_cosh_ps get wrong answer
-//
-//                                __m512 df_now = _mm512_mul_ps(_mm512_add_ps(a_con, _mm512_mul_ps(d1_d2, cos_tmp)),
-//                                                              ofive);
-////                                __m512 df_now = _mm512_mul_ps(a_con, ofive);
-//
-////                                    float chi = M_PI * lambda * df_now * freq2 -
-////                                                M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2
-////                                                + phase_shift;
-//                                //M_PI * lambda * df_now * freq2
-//                                __m512 tmp1 = _mm512_mul_ps(mul_tmp1, _mm512_mul_ps(df_now, freq2));
-//
-//                                //M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2
-//                                __m512 tmp2 = _mm512_mul_ps(mul_tmp2, _mm512_mul_ps(freq2, freq2));
-//
-//                                //cal
-//
-//                                __m512 chi = _mm512_add_ps(_mm512_sub_ps(tmp1, tmp2), phase_shift_con);
-//
-//                                //double rrr = chi - a_w_cos;
-//
-//                                __m256 chi0 = _mm512_extractf32x8_ps(chi, 0);
-//                                __m256 chi1 = _mm512_extractf32x8_ps(chi, 1);
-//                                __m512d rr0 = _mm512_abs_pd(_mm512_sub_pd(_mm512_cvtps_pd(chi0), a_w_cos_con));
-//                                __m512d rr1 = _mm512_abs_pd(_mm512_sub_pd(_mm512_cvtps_pd(chi1), a_w_cos_con));
-//
-//                                //int mul_base = 1;
-//
-//                                //TODO check if rrr will bigger than 2*pi
-//                                //if (fabs(rrr) > M_PI_2)mul_base = -1;
-//                                //if (flip_contrast) {
-//                                //    mul_base = -mul_base;
-//                                //}
-//                                __mmask8 mul_base0;
-//                                __mmask8 mul_base1;
-//                                if (flip_contrast) {
-//                                    mul_base0 = _mm512_cmp_pd_mask(rr0, M_PI_2_con, _CMP_LE_OS);
-//                                    mul_base1 = _mm512_cmp_pd_mask(rr1, M_PI_2_con, _CMP_LE_OS);
-//
-//                                } else {
-//                                    mul_base0 = _mm512_cmp_pd_mask(rr0, M_PI_2_con, _CMP_GT_OS);
-//                                    mul_base1 = _mm512_cmp_pd_mask(rr1, M_PI_2_con, _CMP_GT_OS);
-//                                }
-//                                __mmask16 mul_base = mul_base0 + ((int(mul_base1)) << 8);
-//
-//                                __mmask16 big_base0 = mak_pre[mul_base0];
-//                                __mmask16 big_base1 = mak_pre[mul_base1];
-//
-////                                __m512 img1 = _mm512_load_ps(image + j * Nx2 + i * 2);
-////                                __m512 img2 = _mm512_load_ps(image + j * Nx2 + i * 2 + 16);
-////                                img1 = _mm512_mask_sub_ps(img1, big_base0, _mm512_set1_ps(0), img1);
-////                                img2 = _mm512_mask_sub_ps(img2, big_base1, _mm512_set1_ps(0), img2);
-////                                _mm512_store_ps(image + j * Nx2 + i * 2, img1);
-////                                _mm512_store_ps(image + j * Nx2 + i * 2 + 16, img2);
+                                //float freq2 = x_real * x_real + y_real * y_real;
+                                __m512 freq2 = _mm512_add_ps(_mm512_mul_ps(x_real, x_real),
+                                                             _mm512_mul_ps(y_real_con, y_real_con));
+
+//                                float df_now = (A + (defocus1 - defocus2) * mycos(2 * (alpha - astig))) / 2.0;
+                                //TODO defocus1 - defocus2 is too small that remove it can even pass check
+//                                float df_now = (A + (defocus1 - defocus2) * (cos_atan_xy[j * Nx + i] * cos2ast +
+//                                                                             sin_atan_xy[j * Nx + i] * sin2ast)) / 2.0;
+                                //TODO is float(cos) right?
+//                                    float df_now = (A + (defocus1 - defocus2) * float(cos(2 * (alpha - astig)))) * 0.5;
+                                __m512 cos_tmp = _mm512_cos_ps(
+                                        _mm512_mul_ps(two_con, _mm512_sub_ps(alpha, astig_con)));
+//                                __m512 cos_tmp = _mm512_set1_ps(0);
+                                //TODO why _mm512_cosh_ps get wrong answer
+
+                                __m512 df_now = _mm512_mul_ps(_mm512_add_ps(a_con, _mm512_mul_ps(d1_d2, cos_tmp)),
+                                                              ofive);
+//                                __m512 df_now = _mm512_mul_ps(a_con, ofive);
+
+//                                    float chi = M_PI * lambda * df_now * freq2 -
+//                                                M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2
+//                                                + phase_shift;
+                                //M_PI * lambda * df_now * freq2
+                                __m512 tmp1 = _mm512_mul_ps(mul_tmp1, _mm512_mul_ps(df_now, freq2));
+
+                                //M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2
+                                __m512 tmp2 = _mm512_mul_ps(mul_tmp2, _mm512_mul_ps(freq2, freq2));
+
+                                //cal
+
+                                __m512 chi = _mm512_add_ps(_mm512_sub_ps(tmp1, tmp2), phase_shift_con);
+
+                                //double rrr = chi - a_w_cos;
+
+                                __m256 chi0 = _mm512_extractf32x8_ps(chi, 0);
+                                __m256 chi1 = _mm512_extractf32x8_ps(chi, 1);
+                                __m512d rr0 = _mm512_abs_pd(_mm512_sub_pd(_mm512_cvtps_pd(chi0), a_w_cos_con));
+                                __m512d rr1 = _mm512_abs_pd(_mm512_sub_pd(_mm512_cvtps_pd(chi1), a_w_cos_con));
+
+                                //int mul_base = 1;
+
+                                //TODO check if rrr will bigger than 2*pi
+                                //if (fabs(rrr) > M_PI_2)mul_base = -1;
+                                //if (flip_contrast) {
+                                //    mul_base = -mul_base;
+                                //}
+                                __mmask8 mul_base0;
+                                __mmask8 mul_base1;
+                                if (flip_contrast) {
+                                    mul_base0 = _mm512_cmp_pd_mask(rr0, M_PI_2_con, _CMP_LE_OS);
+                                    mul_base1 = _mm512_cmp_pd_mask(rr1, M_PI_2_con, _CMP_LE_OS);
+
+                                } else {
+                                    mul_base0 = _mm512_cmp_pd_mask(rr0, M_PI_2_con, _CMP_GT_OS);
+                                    mul_base1 = _mm512_cmp_pd_mask(rr1, M_PI_2_con, _CMP_GT_OS);
+                                }
+                                __mmask16 mul_base = mul_base0 + ((int(mul_base1)) << 8);
+
+                                __mmask16 big_base0 = mak_pre[mul_base0];
+                                __mmask16 big_base1 = mak_pre[mul_base1];
+
+//                                __m512 img1 = _mm512_load_ps(image + j * Nx2 + i * 2);
+//                                __m512 img2 = _mm512_load_ps(image + j * Nx2 + i * 2 + 16);
+//                                img1 = _mm512_mask_sub_ps(img1, big_base0, _mm512_set1_ps(0), img1);
+//                                img2 = _mm512_mask_sub_ps(img2, big_base1, _mm512_set1_ps(0), img2);
+//                                _mm512_store_ps(image + j * Nx2 + i * 2, img1);
+//                                _mm512_store_ps(image + j * Nx2 + i * 2 + 16, img2);
+                                for (int ii = 0; ii < 16; ii++) {
+                                    int idi = i * 2 + ii;
+                                    if ((big_base0 >> ii) & 1) {
+                                        image[idi + j * Nx2] *= -1;
+                                    }
+                                }
+                                for (int ii = 0; ii < 16; ii++) {
+                                    int idi = i * 2 + ii + 16;
+                                    if ((big_base1 >> ii) & 1) {
+                                        image[idi + j * Nx2] *= -1;
+                                    }
+                                }
+
 //                                for (int ii = 0; ii < 16; ii++) {
-//                                    int idi = i * 2 + ii;
-//                                    if ((big_base0 >> ii) & 1) {
-//                                        image[idi + j * Nx2] *= -1;
+//                                    int idi = i + ii;
+//                                    if ((mul_base >> ii) & 1) {
+//                                        image[idi * 2 + j * Nx2] *= -1;
+//                                        image[(idi * 2 + 1) + j * Nx2] *= -1;
 //                                    }
 //                                }
-//                                for (int ii = 0; ii < 16; ii++) {
-//                                    int idi = i * 2 + ii + 16;
-//                                    if ((big_base1 >> ii) & 1) {
-//                                        image[idi + j * Nx2] *= -1;
-//                                    }
-//                                }
-//
-////                                for (int ii = 0; ii < 16; ii++) {
-////                                    int idi = i + ii;
-////                                    if ((mul_base >> ii) & 1) {
-////                                        image[idi * 2 + j * Nx2] *= -1;
-////                                        image[(idi * 2 + 1) + j * Nx2] *= -1;
-////                                    }
-////                                }
-//
-//                                idx = _mm512_add_epi32(idx, si_con);
-//
-//                            }
+
+                                idx = _mm512_add_epi32(idx, si_con);
+
+                            }
 
 
                             for (; i < Nxh; i++) {
@@ -1162,36 +1131,34 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     }
 
 
-//                    t3 = GetTime();
-//                    cost4 += t3 - t2;
-//                    t2 = GetTime();
-#pragma omp critical
-                    {
-                        for (int i = 0; i < nz_range; i++) {
-                            fftwf_destroy_plan(plan_ifft_omp[i]);
-                        }
+                    t3 = GetTime();
+                    cost4 += t3 - t2;
+                    t2 = GetTime();
+#pragma omp parallel for num_threads(threadNumber)
+
+                    for (int i = 0; i < nz_range; i++) {
+                        fftwf_destroy_plan(plan_ifft_omp[i]);
                     }
 
-
-//                    t3 = GetTime();
-//                    cost5 += t3 - t2;
-//                    t2 = GetTime();
+                    t3 = GetTime();
+                    cost5 += t3 - t2;
+                    t2 = GetTime();
                     delete[] bufc_pre;
 
 
-//                    t3 = GetTime();
-//                    cost6 += t3 - t2;
-//                    cout << "\tDone!" << endl;
+                    t3 = GetTime();
+                    cost6 += t3 - t2;
+                    cout << "\tDone!" << endl;
 
 
 
                     // recontruction
 
-//                    cout << "\tPerform reconstruction:" << endl;
-//                    t2 = GetTime();
+                    cout << "\tPerform reconstruction:" << endl;
+                    t2 = GetTime();
 
                     // loop: Ny (number of xz-slices)
-//#pragma omp parallel for num_threads(threadNumber)
+#pragma omp parallel for num_threads(threadNumber)
                     for (int j = 0; j < Ny; j++) {
                         __m512i nxy_con = _mm512_set1_epi32(Nx2 * Ny);
                         __m512i nx2_con = _mm512_set1_epi32(Nx2);
@@ -1243,127 +1210,116 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                                            li + 8, li + 7, li + 6, li + 5, li + 4, li + 3, li + 2,
                                                            li + 1, li + 0);
 
-//                            cout << "111" << endl;
+
 //                            static int cnt = 100;
 //                            bool checcc = 0;
-//                            for (; i + 16 <= ri + 1; i += 16) {
-//
-//
-//
-//                                //float x_orig = (i - x_orig_offset) * theta_rad_cos - A;
-//                                //float z_orig = (i - x_orig_offset) * theta_rad_sin + B;
-//
-//
-//                                //i - x_orig_offset
-//                                __m512 sub_tmp = _mm512_sub_ps(_mm512_cvtepi32_ps(idx), offset_con);
-////                                cout << "111" << endl;
-//
-//
-//
-//                                //select pre 8 float to f0, last 8 to f1
-//                                __m256 f0 = _mm512_extractf32x8_ps(sub_tmp, 0);
-//                                __m256 f1 = _mm512_extractf32x8_ps(sub_tmp, 1);
-//                                __m512d d0 = _mm512_cvtps_pd(f0);
-//                                __m512d d1 = _mm512_cvtps_pd(f1);
-//                                // sub_tmp * theta_rad_cos - A
-//                                __m512d x_tmp0 = _mm512_sub_pd(_mm512_mul_pd(d0, cos_con), a_con);
-//                                __m512d x_tmp1 = _mm512_sub_pd(_mm512_mul_pd(d1, cos_con), a_con);
-//
-//                                //merge 8+8 double to 16 float
-//                                __m512 x_ori;
-//                                x_ori = _mm512_insertf32x8(x_ori, _mm512_cvtpd_ps(x_tmp0), 0);
-//                                x_ori = _mm512_insertf32x8(x_ori, _mm512_cvtpd_ps(x_tmp1), 1);
-//
-//
-////                                cout << "111" << endl;
-//
-//                                // sub_tmp * theta_rad_sin + B
-//                                __m512d z_tmp0 = _mm512_add_pd(_mm512_mul_pd(d0, sin_con), b_con);
-//                                __m512d z_tmp1 = _mm512_add_pd(_mm512_mul_pd(d1, sin_con), b_con);
-//                                //merge 8+8 double to 16 float
-//                                __m512 z_ori;
-//                                z_ori = _mm512_insertf32x8(z_ori, _mm512_cvtpd_ps(z_tmp0), 0);
-//                                z_ori = _mm512_insertf32x8(z_ori, _mm512_cvtpd_ps(z_tmp1), 1);
-//
-//                                //int x1 = int(x_orig);
-//                                __m512i x1 = _mm512_cvt_roundps_epi32(x_ori,
-//                                                                      _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
-//
-//                                //int x2 = int(x_orig + 1 - eps);
-//                                __m512i x2 = _mm512_cvt_roundps_epi32(_mm512_add_ps(x_ori, eps_con),
-//                                                                      _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
-//
-////                                cout << "111" << endl;
-//
-//
-//                                //float coeff = x_orig - x1;
-//                                __m512 coeff = _mm512_sub_ps(x_ori, _mm512_cvtepi32_ps(x1));
-//
-//                                //int n_z = int((z_orig + C) / defocus_step);
-//                                //TODO change div to mul
-//                                __m512 nz_tmp = _mm512_mul_ps(_mm512_add_ps(z_ori, c_con), d_step_con);
-//
-//
-//                                __m512i n_z = _mm512_cvt_roundps_epi32(nz_tmp,
-//                                                                       _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
-//
-//
-////                                cout << "111" << endl;
-//
-//
-//                                //cal  n_z * Nx2 * Ny + j * Nx2
-//                                __m512i tt0 = _mm512_mullo_epi32(n_z, nxy_con);
-//                                __m512i tt1 = _mm512_mullo_epi32(j_con, nx2_con);
-//
-//
-//                                __m512i ids_base = _mm512_add_epi32(tt0, tt1);
-//
-//
-//                                //cal  n_z * Nx2 * Ny + j * Nx2 + x1
-//                                __m512i ids1 = _mm512_add_epi32(ids_base, x1);
-//                                //cal  n_z * Nx2 * Ny + j * Nx2 + x2
-//                                __m512i ids2 = _mm512_add_epi32(ids_base, x2);
-//
-//
-//                                __m512 cc0 = _mm512_i32gather_ps(ids1, stack_corrected, 4);
-//
-//                                __m512 cc1 = _mm512_i32gather_ps(ids2, stack_corrected, 4);
-//
-////                                cout << "111" << endl;
-//
-//                                //(1 - coeff) * stack_corrected[n_z][j * Nx2 + x1]
-//                                __m512 c0 = _mm512_mul_ps(_mm512_sub_ps(one_con, coeff), cc0);
-////                                cout << "222" << endl;
-//
-//
-//                                //(coeff) * stack_corrected[n_z][j * Nx2 + x2]
-//                                __m512 c1 = _mm512_mul_ps(coeff, cc1);
-////                                cout << "222" << endl;
-//
-//
-//                                float *p_now = stack_recon[tid][j] + k * Nx + i;
-//                                __m512 tmplod = _mm512_loadu_ps(p_now);
-////                                cout << "333" << endl;
-//
-//                                //last baba
-//                                __m512 resss = _mm512_add_ps(_mm512_add_ps(c0, c1), tmplod);
-////                                cout << "444" << endl;
-//
-//                                _mm512_storeu_ps(p_now, resss);
-//
-////                                cout << "555" << endl;
-//
-//                                idx = _mm512_add_epi32(idx, si_con);
-////                                cout << "666" << endl;
-//
-////                                exit(0);
-////                                cout << "333" << endl;
-//
-//                                // the num in the corrected stack for the current height
-////                                stack_recon[j][i + k * Nx] +=
-////                                        (1 - coeff) * stack_corrected[n_z][j * Nx2 + x1] +
-////                                        (coeff) * stack_corrected[n_z][j * Nx2 + x2];
-//                            }
+                            for (; i + 16 <= ri + 1; i += 16) {
+
+
+
+                                //float x_orig = (i - x_orig_offset) * theta_rad_cos - A;
+                                //float z_orig = (i - x_orig_offset) * theta_rad_sin + B;
+
+
+                                //i - x_orig_offset
+                                __m512 sub_tmp = _mm512_sub_ps(_mm512_cvtepi32_ps(idx), offset_con);
+
+
+
+                                //select pre 8 float to f0, last 8 to f1
+                                __m256 f0 = _mm512_extractf32x8_ps(sub_tmp, 0);
+                                __m256 f1 = _mm512_extractf32x8_ps(sub_tmp, 1);
+                                __m512d d0 = _mm512_cvtps_pd(f0);
+                                __m512d d1 = _mm512_cvtps_pd(f1);
+                                // sub_tmp * theta_rad_cos - A
+                                __m512d x_tmp0 = _mm512_sub_pd(_mm512_mul_pd(d0, cos_con), a_con);
+                                __m512d x_tmp1 = _mm512_sub_pd(_mm512_mul_pd(d1, cos_con), a_con);
+
+                                //merge 8+8 double to 16 float
+                                __m512 x_ori;
+                                x_ori = _mm512_insertf32x8(x_ori, _mm512_cvtpd_ps(x_tmp0), 0);
+                                x_ori = _mm512_insertf32x8(x_ori, _mm512_cvtpd_ps(x_tmp1), 1);
+
+
+
+                                // sub_tmp * theta_rad_sin + B
+                                __m512d z_tmp0 = _mm512_add_pd(_mm512_mul_pd(d0, sin_con), b_con);
+                                __m512d z_tmp1 = _mm512_add_pd(_mm512_mul_pd(d1, sin_con), b_con);
+                                //merge 8+8 double to 16 float
+                                __m512 z_ori;
+                                z_ori = _mm512_insertf32x8(z_ori, _mm512_cvtpd_ps(z_tmp0), 0);
+                                z_ori = _mm512_insertf32x8(z_ori, _mm512_cvtpd_ps(z_tmp1), 1);
+
+                                //int x1 = int(x_orig);
+                                __m512i x1 = _mm512_cvt_roundps_epi32(x_ori,
+                                                                      _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
+
+                                //int x2 = int(x_orig + 1 - eps);
+                                __m512i x2 = _mm512_cvt_roundps_epi32(_mm512_add_ps(x_ori, eps_con),
+                                                                      _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
+
+
+
+                                //float coeff = x_orig - x1;
+                                __m512 coeff = _mm512_sub_ps(x_ori, _mm512_cvtepi32_ps(x1));
+
+                                //int n_z = int((z_orig + C) / defocus_step);
+                                //TODO change div to mul
+                                __m512 nz_tmp = _mm512_mul_ps(_mm512_add_ps(z_ori, c_con), d_step_con);
+
+
+                                __m512i n_z = _mm512_cvt_roundps_epi32(nz_tmp,
+                                                                       _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
+
+
+
+
+                                //cal  n_z * Nx2 * Ny + j * Nx2
+                                __m512i tt0 = _mm512_mullo_epi32(n_z, nxy_con);
+                                __m512i tt1 = _mm512_mullo_epi32(j_con, nx2_con);
+
+
+                                __m512i ids_base = _mm512_add_epi32(tt0, tt1);
+
+
+                                //cal  n_z * Nx2 * Ny + j * Nx2 + x1
+                                __m512i ids1 = _mm512_add_epi32(ids_base, x1);
+                                //cal  n_z * Nx2 * Ny + j * Nx2 + x2
+                                __m512i ids2 = _mm512_add_epi32(ids_base, x2);
+
+
+                                __m512 cc0 = _mm512_i32gather_ps(ids1, stack_corrected, 4);
+
+                                __m512 cc1 = _mm512_i32gather_ps(ids2, stack_corrected, 4);
+
+//                                cout << "111" << endl;
+
+                                //(1 - coeff) * stack_corrected[n_z][j * Nx2 + x1]
+                                __m512 c0 = _mm512_mul_ps(_mm512_sub_ps(one_con, coeff), cc0);
+
+
+                                //(coeff) * stack_corrected[n_z][j * Nx2 + x2]
+                                __m512 c1 = _mm512_mul_ps(coeff, cc1);
+
+
+                                float *p_now = stack_recon[j] + k * Nx + i;
+                                __m512 tmplod = _mm512_load_ps(p_now);
+
+                                //last baba
+                                __m512 resss = _mm512_add_ps(_mm512_add_ps(c0, c1), tmplod);
+                                _mm512_store_ps(p_now, resss);
+
+
+                                idx = _mm512_add_epi32(idx, si_con);
+
+//                                exit(0);
+//                                cout << "333" << endl;
+
+                                // the num in the corrected stack for the current height
+//                                stack_recon[j][i + k * Nx] +=
+//                                        (1 - coeff) * stack_corrected[n_z][j * Nx2 + x1] +
+//                                        (coeff) * stack_corrected[n_z][j * Nx2 + x2];
+                            }
                             for (; i <= ri; i++)   // loop for the xz-plane to perform BP
                             {
                                 float x_orig = (i - x_orig_offset) * theta_rad_cos - A;
@@ -1373,7 +1329,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 float coeff = x_orig - x1;
                                 int n_z = int((z_orig + C) / defocus_step);
                                 // the num in the corrected stack for the current height
-                                stack_recon[tid][j][i + k * Nx] +=
+                                stack_recon[j][i + k * Nx] +=
                                         (1 - coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x1] +
                                         (coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x2];
                             }
@@ -1381,17 +1337,14 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
                         }
                     }
-//                    t3 = GetTime();
-//                    printf("reconstruction cost %.3f\n", t3 - t2);
-//                    cost7 += t3 - t2;
-//                    cout << "\tDone" << endl;
+                    t3 = GetTime();
+                    printf("reconstruction cost %.3f\n", t3 - t2);
+                    cost7 += t3 - t2;
+                    cout << "\tDone" << endl;
                 }
             }
             delete[] image_now;
-//#pragma omp critical
-//            {
-//                printf("image %d cost %.3f\n", n, GetTime() - t1);
-//            }
+            printf("image %d cost %.3f\n", n, GetTime() - t1);
         }
 
         t2 = GetTime();
@@ -1431,20 +1384,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         // loop: Ny (number of xz-slices)
 //#pragma omp parallel for num_threads(threadNumber)
 
-        float *stack_recon_tot[stack_orig.getNy()]; // (x,z,y)
         for (int j = 0; j < stack_orig.getNy(); j++) {
-            stack_recon_tot[j] = new float[stack_orig.getNx() * h];
-            for (int i = 0; i < stack_orig.getNx() * h; i++) {
-                stack_recon_tot[j][i] = 0.0;
-                for (int tid = 0; tid < threadNumber; tid++) {
-                    stack_recon_tot[j][i] += stack_recon[tid][j][i];
-                }
-            }
-        }
-
-
-        for (int j = 0; j < stack_orig.getNy(); j++) {
-            stack_final.write2DIm(stack_recon_tot[j], j);
+            stack_final.write2DIm(stack_recon[j], j);
         }
 
         printf("write t1 cost %.3f\n", GetTime() - tw);
@@ -1455,8 +1396,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //        float min_thread[threadNumber], max_thread[threadNumber];
 //        double mean_thread[threadNumber];
 //        for (int th = 0; th < threadNumber; th++) {
-//            min_thread[th] = stack_recon_tot[0][0];
-//            max_thread[th] = stack_recon_tot[0][0];
+//            min_thread[th] = stack_recon[0][0];
+//            max_thread[th] = stack_recon[0][0];
 //            mean_thread[th] = 0.0;
 //        }
 //
@@ -1467,13 +1408,13 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //#pragma omp parallel for num_threads(threadNumber)
 //        for (int j = 0; j < stack_orig.getNy(); j++) {
 //            double mean_now = 0.0;
-//            float mis = stack_recon_tot[j][0];
-//            float mxs = stack_recon_tot[j][0];
+//            float mis = stack_recon[j][0];
+//            float mxs = stack_recon[j][0];
 //            int tid = omp_get_thread_num();
 //            for (int i = 0; i < stack_orig.getNx() * h; i++) {
-//                mean_now += stack_recon_tot[j][i];
-//                mis = min(mis, stack_recon_tot[j][i]);
-//                mxs = max(mxs, stack_recon_tot[j][i]);
+//                mean_now += stack_recon[j][i];
+//                mis = min(mis, stack_recon[j][i]);
+//                mxs = max(mxs, stack_recon[j][i]);
 //            }
 //            min_thread[tid] = min(min_thread[tid], mis);
 //            max_thread[tid] = max(max_thread[tid], mis);
@@ -1498,20 +1439,20 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
         float min_thread, max_thread;
         double mean_thread;
-        min_thread = stack_recon_tot[0][0];
-        max_thread = stack_recon_tot[0][0];
+        min_thread = stack_recon[0][0];
+        max_thread = stack_recon[0][0];
         mean_thread = 0.0;
 
 #pragma omp parallel for num_threads(threadNumber)
         for (int j = 0; j < stack_orig.getNy(); j++) {
             double mean_now = 0.0;
-            float mis = stack_recon_tot[j][0];
-            float mxs = stack_recon_tot[j][0];
+            float mis = stack_recon[j][0];
+            float mxs = stack_recon[j][0];
 
             for (int i = 0; i < stack_orig.getNx() * h; i++) {
-                mean_now += stack_recon_tot[j][i];
-                mis = min(mis, stack_recon_tot[j][i]);
-                mxs = max(mxs, stack_recon_tot[j][i]);
+                mean_now += stack_recon[j][i];
+                mis = min(mis, stack_recon[j][i]);
+                mxs = max(mxs, stack_recon[j][i]);
             }
 #pragma omp critical
             {
@@ -1536,12 +1477,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         printf("write t5 cost %.3f\n", GetTime() - tw);
         tw = GetTime();
         for (int j = 0; j < stack_orig.getNy(); j++) {
-            delete[] stack_recon_tot[j];
+            delete[] stack_recon[j];
         }
-        for (int tid = 0; tid < threadNumber; tid++)
-            for (int j = 0; j < stack_orig.getNy(); j++) {
-                delete[] stack_recon[tid][j];
-            }
 
         printf("write t6 cost %.3f\n", GetTime() - tw);
         tw = GetTime();
