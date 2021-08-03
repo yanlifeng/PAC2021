@@ -12,6 +12,7 @@
 - [x] vectorize for Rebu when g++
 - [ ] optimize weight、pre bufc and malloc cost 
 - [x] optimize write
+- [ ] omp in for z
 
 
 

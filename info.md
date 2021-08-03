@@ -12,6 +12,7 @@
 - [x] vectorize for Rebu when g++
 - [ ] optimize weight、pre bufc and malloc cost 
 - [x] optimize write
+- [ ] omp in for z
 
 
 
@@ -559,7 +560,14 @@ tot cost 4.26720
 
 
 
+## 0803
 
+早上拿几分钟写了一下外层循环的，但是发现stack_recon的副本根本开不下，遂投降，下面测测目前版本的线程拓展性：
+
+| Verison | Cpp tot | Read | Weight | CTF  | Rebu | Total |
+| ------- | ------- | ---- | ------ | ---- | ---- | ----- |
+|         |         |      |        |      |      |       |
+|         |         |      |        |      |      |       |
 
 
 
