@@ -20,34 +20,13 @@
 #include "fftw3.h"
 #include "omp.h"
 #include "util.h"
-#include <sys/time.h>
-#include <cassert>
-
-#include "omp.h"
-
-#include <immintrin.h>
-
-#define mycos(x) (1-x*x/2+x*x*x*x/24)
-
-const int threadNumber = 64;
-
-const float eps = 1e-7;
-
-
-double GetTime() {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (double) tv.tv_sec + (double) tv.tv_usec / 1000000;
-}
 
 static void buf2fft(float *buf, float *fft, int nx, int ny) {
     int nxb = nx + 2 - nx % 2;
     int i;
-#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < (nx + 2 - nx % 2) * ny; i++) {
         fft[i] = 0.0;
     }
-#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < ny; i++) {
         memcpy(fft + i * nxb, buf + i * nx, sizeof(float) * nx);
     }
@@ -68,11 +47,9 @@ static void buf2fft_padding_1D(float *buf, float *fft, int nx_orig, int nx_final
     int nxb = nx_final + 2 - nx_final % 2;
     int nxp = nx_final - nx_orig + 1;
     int i, j;
-#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < (nx_final + 2 - nx_final % 2) * ny_final; i++) {
         fft[i] = 0.0;
     }
-#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < ny_orig; i++) {
         memcpy(fft + i * nxb, buf + i * nx_orig, sizeof(float) * nx_orig);
         for (j = nx_orig; j < nx_final; j++)    // padding for continuity (FFT本质是周期延拓后做DFT，将首尾连接以保证连续性)
@@ -86,11 +63,9 @@ static void buf2fft_padding_1D(float *buf, float *fft, int nx_orig, int nx_final
 static void fft2buf_padding_1D(float *buf, float *fft, int nx_orig, int nx_final, int ny_orig, int ny_final) {
     int nxb = nx_final + 2 - nx_final % 2;
     int i;
-#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < nx_orig * ny_orig; i++) {
         buf[i] = 0.0;
     }
-#pragma omp parallel for num_threads(threadNumber)
     for (i = 0; i < ny_orig; i++) {
         memcpy(buf + i * nx_orig, fft + i * nxb, sizeof(float) * nx_orig);
     }
@@ -145,7 +120,6 @@ static void filter_weighting_1D_many(float *data, int Nx, int Ny, float radial, 
     int Nx_final = Nx + Nx_padding;
     fftwf_plan plan_fft, plan_ifft;
     float *bufc = new float[(Nx_final + 2 - Nx_final % 2) * Ny];
-
     plan_fft = fftwf_plan_many_dft_r2c(1, &Nx_final, Ny, (float *) bufc, NULL, 1, (Nx_final + 2 - Nx_final % 2),
                                        reinterpret_cast<fftwf_complex *>(bufc), NULL, 1,
                                        (Nx_final + 2 - Nx_final % 2) / 2, FFTW_ESTIMATE);
@@ -154,13 +128,11 @@ static void filter_weighting_1D_many(float *data, int Nx, int Ny, float radial, 
                                         (Nx_final + 2 - Nx_final % 2), FFTW_ESTIMATE);
 
     buf2fft_padding_1D(data, bufc, Nx, Nx_final, Ny, Ny);
-
     fftwf_execute(plan_fft);
 
     int radial_Nx = int(floor((Nx_final) * radial));
     float sigma_Nx = float(Nx_final) * sigma;
     // loop: Ny (all Fourier components for y-axis)
-#pragma omp parallel for num_threads(threadNumber)
     for (int j = 0; j < Ny; j++) {
         // loop: Nx_final+2-Nx_final%2 (all Fourier components for x-axis)
         for (int i = 0; i < Nx_final + 2 - Nx_final % 2; i += 2) {
@@ -186,7 +158,6 @@ static void filter_weighting_1D_many(float *data, int Nx, int Ny, float radial, 
 
     fftwf_execute(plan_ifft);
     fft2buf_padding_1D(data, bufc, Nx, Nx_final, Ny, Ny);
-#pragma omp parallel for num_threads(threadNumber)
     for (int i = 0; i < Nx * Ny; i++)   // normalization
     {
         data[i] /= Nx;
@@ -268,17 +239,12 @@ static void
 ctf_correction(float *image, int Nx, int Ny, CTF ctf, bool flip_contrast, float z_offset)   // z_offset in pixels
 {
     fftwf_plan plan_fft, plan_ifft;
-
     float *bufc = new float[(Nx + 2 - Nx % 2) * Ny];
-#pragma omp critical
-    {
-        plan_fft = fftwf_plan_dft_r2c_2d(Ny, Nx, (float *) bufc, reinterpret_cast<fftwf_complex *>(bufc),
-                                         FFTW_ESTIMATE);
-        plan_ifft = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(bufc), (float *) bufc,
-                                          FFTW_ESTIMATE);
-    }
+    plan_fft = fftwf_plan_dft_r2c_2d(Ny, Nx, (float *) bufc, reinterpret_cast<fftwf_complex *>(bufc), FFTW_ESTIMATE);
+    plan_ifft = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(bufc), (float *) bufc, FFTW_ESTIMATE);
     buf2fft(image, bufc, Nx, Ny);
     fftwf_execute(plan_fft);
+
     // loop: Ny (all Fourier components for y-axis)
     for (int j = 0; j < Ny; j++) {
         // loop: Nx+2-Nx%2 (all Fourier components for x-axis)
@@ -295,12 +261,8 @@ ctf_correction(float *image, int Nx, int Ny, CTF ctf, bool flip_contrast, float 
     {
         image[i] = image[i] / (Nx * Ny);
     }
-#pragma omp critical
-    {
-        fftwf_destroy_plan(plan_fft);
-        fftwf_destroy_plan(plan_ifft);
-    }
-
+    fftwf_destroy_plan(plan_fft);
+    fftwf_destroy_plan(plan_ifft);
     delete[] bufc;
 }
 
@@ -310,10 +272,6 @@ ReconstructionAlgo_WBP_RAM::~ReconstructionAlgo_WBP_RAM() {
 }
 
 void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara, map<string, string> &outputPara) {
-
-    double t_start = GetTime();
-    double tt_t = GetTime();
-
     cout << "Run doReconstruction() in ReconstructionAlgo_WBP_RAM" << endl;
 
     // Input
@@ -565,32 +523,15 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         }
     }
 
-    printf("para cost %.3f\n", GetTime() - tt_t);
 
 
     // Reconstruction
     cout << endl << "Reconstruction with (W)BP in RAM:" << endl << endl;
     if (!unrotated_stack)    // input rotated stack (y-axis as tilt axis)
     {
-        double cost0 = 0;
-        double cost1 = 0;
-        double cost2 = 0;
-        double cost2_5 = 0;
-        double cost3 = 0;
-        double cost4 = 0;
-        double cost5 = 0;
-        double cost6 = 0;
-        double cost7 = 0;
-        double cost8 = 0;
-
-
-        double t0, t1, t2, t3;
-        t0 = GetTime();
-
         cout << "Using rotated stack" << endl;
 
         float *stack_recon[stack_orig.getNy()]; // (x,z,y)
-#pragma omp parallel for num_threads(threadNumber)
         for (int j = 0; j < stack_orig.getNy(); j++) {
             stack_recon[j] = new float[stack_orig.getNx() * h];
             for (int i = 0; i < stack_orig.getNx() * h; i++) {
@@ -601,80 +542,14 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         cout << "Start reconstruction:" << endl;
         float x_orig_offset = float(stack_orig.getNx()) / 2.0, z_orig_offset = float(h) / 2.0;
         // loop: Nz (number of images)
-
-
-
-
-        cout << "range " << stack_orig.getNx() << " " << stack_orig.getNy() << " " << stack_orig.getNz() << endl;
-
-        fftwf_init_threads();
-        fftwf_plan_with_nthreads(1);
-        int Nx = stack_orig.getNx();
-        int Ny = stack_orig.getNy();
-        int Nx2 = Nx + 2 - Nx % 2;
-        int Nxh = Nx / 2 + 1;
-        int Nyh = Ny / 2 + 1;
-        int Nyh2 = (Ny + 1) / 2;
-        int Nzz = (int(h_tilt_max / defocus_step) + 1);
-        float *stack_corrected = new float[Nzz * Nx2 * Ny];
-
-        float *atan_xy = new float[Ny * Nx];
-        float *sin_atan_xy = new float[Ny * Nx];
-        float *cos_atan_xy = new float[Ny * Nx];
-#pragma omp parallel for num_threads(threadNumber)
-        for (int j = 1; j < Ny; j++) {
-            for (int i = 1; i < Nx; i++) {
-                float x_norm = i;
-                float y_norm = (j >= Nyh) ? (j - Ny) : (j);
-                float x_real = float(x_norm) / float(Nx) * (1 / pix);
-                float y_real = float(y_norm) / float(Ny) * (1 / pix);
-                float alpha;
-                if (x_norm == 0) {
-                    if (y_norm > 0) {
-                        alpha = M_PI_2;
-                    } else if (y_norm < 0) {
-                        alpha = -M_PI_2;
-                    } else {
-                        alpha = 0.0;
-                    }
-                } else {
-                    alpha = atan(y_real / x_real);
-                }
-                atan_xy[j * Nx + i] = alpha;
-                sin_atan_xy[j * Nx + i] = sin(2 * alpha);
-                cos_atan_xy[j * Nx + i] = cos(2 * alpha);
-            }
-        }
-//        int *mak_pre = new int[1 << 8];
-//#pragma omp parallel for num_threads(threadNumber)
-//        for (int i = 0; i < (1 << 8); i++) {
-//            mak_pre[i] = 0;
-//            int now = 0;
-//            for (int j = 7; j >= 0; j--) {
-//                if ((i >> j) & 1) {
-//                    now <<= 1;
-//                    now++;
-//                    now <<= 1;
-//                    now++;
-//                } else {
-//                    now <<= 2;
-//                }
-//            }
-//            mak_pre[i] = now;
-//        }
-//
-
-        for (int n = 0; n < stack_orig.getNz(); n++) {
-            t1 = GetTime();
-            t2 = GetTime();
+        for (int n = 0; n < stack_orig.getNz(); n++)   // loop for every micrograph
+        {
             cout << "Image " << n << ":" << endl;
             float theta_rad = theta[n] / 180 * M_PI;
-            double theta_rad_cos = cos(theta_rad);
-            double theta_rad_sin = sin(theta_rad);
             float *image_now = new float[stack_orig.getNx() * stack_orig.getNy()];
             stack_orig.read2DIm_32bit(image_now, n);
-            t3 = GetTime();
-            cost0 += t3 - t2;
+            float *image_now_backup = new float[stack_orig.getNx() * stack_orig.getNy()];
+            memcpy(image_now_backup, image_now, sizeof(float) * stack_orig.getNx() * stack_orig.getNy());
 
             if (skip_ctfcorrection)  // no correction, simple (W)BP
             {
@@ -807,159 +682,42 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
                     // write all corrected and weighted images in one mrc stack
                     cout << "\tPerform 3D correction & save corrected stack:" << endl;
-
-                    t2 = GetTime();
+                    float *stack_corrected[int(h_tilt_max / defocus_step) + 1]; // 第一维遍历不同高度，第二维x，第三维y
                     int n_zz = 0;
-                    fftwf_plan_with_nthreads(64);
 
                     // weighting
                     if (!skip_weighting) {
                         cout << "\tStart weighting..." << endl;
-
                         filter_weighting_1D_many(image_now, stack_orig.getNx(), stack_orig.getNy(), weighting_radial,
                                                  weighting_sigma);
                         cout << "\tDone" << endl;
                     }
-                    t3 = GetTime();
-                    cost1 += t3 - t2;
 
                     // 3D-CTF correction
-                    //hotspot 1
                     cout << "\tStart 3D-CTF correction..." << endl;
 
-                    //把第一波fft操作拿出来，预处理好放到bufc_pre中
-                    float *bufc_pre = new float[(Nx + 2 - Nx % 2) * Ny];
-                    t2 = GetTime();
 
-                    fftwf_plan plan_fft_pre = fftwf_plan_dft_r2c_2d(Ny, Nx, (float *) bufc_pre,
-                                                                    reinterpret_cast<fftwf_complex *>(bufc_pre),
-                                                                    FFTW_ESTIMATE);
-                    buf2fft(image_now, bufc_pre, Nx, Ny);
-                    fftwf_execute(plan_fft_pre);
-                    fftwf_destroy_plan(plan_fft_pre);
-                    fftwf_plan_with_nthreads(1);
+                    float *image_now_temp = new float[stack_orig.getNx() * stack_orig.getNy()];
+                    //loop: number of blocks (for 3D-CTF correction)
+                    for (int zz = -int(h_tilt_max / 2); zz < int(h_tilt_max /
+                                                                 2); zz += defocus_step)    // loop over every height (correct with different defocus)
+                    {
+                        memcpy(image_now_temp, image_now,
+                               sizeof(float) * stack_orig.getNx() * stack_orig.getNy()); // get the raw image!!!
 
-                    t3 = GetTime();
-                    cost2 += t3 - t2;
-                    t2 = GetTime();
-                    int n_zz_thread[threadNumber];
-                    for (int i = 0; i < threadNumber; i++) {
-                        n_zz_thread[i] = 0;
-                    }
-                    int zl = -int(h_tilt_max / 2);
-                    int zr = int(h_tilt_max / 2);
-
-                    double a_w_cos = acos(w_cos);
-
-                    t3 = GetTime();
-                    cost2_5 += t3 - t2;
-                    t2 = GetTime();
-
-                    int nz_range = int(h_tilt_max / defocus_step) + 1;
-//                    fftwf_plan plan_ifft_omp[nz_range];
-//#pragma omp parallel for num_threads(threadNumber)
-//                    for (int i = 0; i < nz_range; i++) {
-//                        float *image = stack_corrected + i * Nx2 * Ny;
-//                        plan_ifft_omp[i] = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(image),
-//                                                                 (float *) image, FFTW_ESTIMATE);
-//                    }
-
-                    t3 = GetTime();
-                    cost3 += t3 - t2;
-                    t2 = GetTime();
-
-
-#pragma omp parallel for num_threads(threadNumber)
-                    for (int zz = zl; zz < zr; zz += defocus_step) {
-
-                        int thread_id = omp_get_thread_num();
-
-
+                        // correction
                         int n_z = (zz + int(h_tilt_max / 2)) / defocus_step;
-                        float *image = stack_corrected + n_z * Nx2 * Ny;
-                        CTF ctf = ctf_para[n];
-                        float z_offset = float(zz) + float(defocus_step - 1) / 2;
-                        memcpy(image, bufc_pre, sizeof(float) * (Nx2 * Ny));
 
-                        float defocus1 = ctf.defocus1;
-                        float defocus2 = ctf.defocus2;
-                        float astig = ctf.astig;
-                        float lambda = ctf.lambda;
-                        float phase_shift = ctf.phase_shift;
-                        float w_sin = ctf.w_sin;
-                        float w_cos = ctf.w_cos;
-                        float pix = ctf.pix;
-                        float Cs = ctf.Cs;
-                        float A = (defocus1 + defocus2 - 2 * z_offset * pix);
-                        float sin2ast = sin(2 * astig);
-                        float cos2ast = cos(2 * astig);
-
-                        float div_Nx = 1.0 / float(Nx) * (1 / pix);
-
-                        for (int j = 0; j < Ny; j++) {
-
-                            float y_norm = (j >= Nyh) ? (j - Ny) : (j);
-                            float y_real = float(y_norm) / float(Ny) * (1 / pix);
-
-                            for (int i = 0; i < Nxh; i++) {
-
-                                float x_norm = i;
-                                float x_real = float(x_norm) * div_Nx;
-                                float alpha = atan_xy[j * Nx + i];
-
-                                float freq2 = x_real * x_real + y_real * y_real;
-                                float df_now = (A + (defocus1 - defocus2) * (cos_atan_xy[j * Nx + i] * cos2ast +
-                                                                             sin_atan_xy[j * Nx + i] * sin2ast)) / 2.0;
-//                                float df_now = (A + (defocus1 - defocus2) * (cos(2 * (alpha - astig)))) / 2.0;
-
-//                                float df_now = (A + (defocus1 - defocus2) * mycos(2 * (alpha - astig))) / 2.0;
-                                float chi = (M_PI) * lambda * df_now * freq2 -
-                                            (M_PI_2) * Cs * lambda * lambda * lambda * freq2 * freq2
-                                            + phase_shift - a_w_cos;
-
-                                int mul_base = 1;
-                                //TODO check if rrr will bigger than 2*pi
-                                if (fabs(chi) > M_PI_2)mul_base = -1;
-                                if (flip_contrast) {
-                                    mul_base = -mul_base;
-                                }
-                                if (mul_base < 0) {
-                                    image[i * 2 + j * Nx2] *= -1;
-                                    image[(i * 2 + 1) + j * Nx2] *= -1;
-                                }
-                            }
-                        }
-                        fftwf_plan plan_ifft;
-                        plan_ifft = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(image),
-                                                          (float *) image, FFTW_ESTIMATE);
-                        fftwf_execute(plan_ifft);
-                        fftwf_destroy_plan(plan_ifft);
-                        for (int i = 0; i < Nx2 * Ny; i++)image[i] = image[i] / (Nx * Ny);
-                        n_zz_thread[thread_id]++;
+                        ctf_correction(image_now_temp, stack_orig.getNx(), stack_orig.getNy(), ctf_para[n],
+                                       flip_contrast, float(zz) + float(defocus_step - 1) / 2);
+                        // save
+                        stack_corrected[n_z] = new float[stack_orig.getNx() * stack_orig.getNy()];
+                        memcpy(stack_corrected[n_z], image_now_temp,
+                               sizeof(float) * stack_orig.getNx() * stack_orig.getNy());
+                        n_zz++;
                     }
+                    delete[] image_now_temp;
 
-
-                    for (int i = 0; i < threadNumber; i++) {
-                        n_zz += n_zz_thread[i];
-                    }
-
-
-                    t3 = GetTime();
-                    cost4 += t3 - t2;
-                    t2 = GetTime();
-//#pragma omp parallel for num_threads(threadNumber)
-//                    for (int i = 0; i < nz_range; i++) {
-//                        fftwf_destroy_plan(plan_ifft_omp[i]);
-//                }
-
-                    t3 = GetTime();
-                    cost5 += t3 - t2;
-                    t2 = GetTime();
-                    delete[] bufc_pre;
-
-
-                    t3 = GetTime();
-                    cost6 += t3 - t2;
                     cout << "\tDone!" << endl;
 
 
@@ -967,168 +725,124 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     // recontruction
 
                     cout << "\tPerform reconstruction:" << endl;
-                    t2 = GetTime();
+
+                    float *recon_now;
+
+                    recon_now = new float[stack_orig.getNx() * h];   // 第一维x，第二维z
+
 
                     // loop: Ny (number of xz-slices)
-#pragma omp parallel for num_threads(threadNumber)
-                    for (int j = 0; j < Ny; j++) {
-
+                    for (int j = 0; j < stack_orig.getNy(); j++) {
+                        // BP
+                        // loop: Nx*h (whole xz-slice)
+                        for (int i = 0; i < stack_orig.getNx() * h; i++) {
+                            recon_now[i] = 0.0;
+                        }
                         // loop: Nx*h (whole xz-slice)
                         for (int k = 0; k < h; k++) {
-                            double l = 0;
-                            double r = Nx - 1;
-
-                            l = max(l, ((k - z_orig_offset) * theta_rad_sin - x_orig_offset)
-                                       / theta_rad_cos + x_orig_offset);
-                            r = min(r, ((k - z_orig_offset) * theta_rad_sin - x_orig_offset + Nx - 1)
-                                       / theta_rad_cos + x_orig_offset);
-                            if (theta_rad_cos < 0)swap(l, r);
-
-                            double ll = 0;
-                            double rr = Nx - 1;
-                            ll = max(ll, ((z_orig_offset - k) * theta_rad_cos - int(h_tilt_max / 2))
-                                         / theta_rad_sin + x_orig_offset);
-
-                            rr = min(rr, ((z_orig_offset - k) * theta_rad_cos - int(h_tilt_max / 2) +
-                                          n_zz * defocus_step) / theta_rad_sin + x_orig_offset);
-                            if (theta_rad_sin < 0)swap(ll, rr);
-                            l = max(l, ll);
-                            r = min(r, rr);
-
-                            int li = ceil(l);
-                            int ri = floor(r);
-                            double A = (k - z_orig_offset) * theta_rad_sin - x_orig_offset;
-                            double B = (k - z_orig_offset) * theta_rad_cos + z_orig_offset;
-                            float C = -z_orig_offset + int(h_tilt_max / 2);
-
-
-                            for (int i = li; i <= ri; i++)   // loop for the xz-plane to perform BP
+                            for (int i = 0; i < stack_orig.getNx(); i++)   // loop for the xz-plane to perform BP
                             {
-                                float x_orig = (i - x_orig_offset) * theta_rad_cos - A;
-                                float z_orig = (i - x_orig_offset) * theta_rad_sin + B;
-                                int x1 = int(x_orig);
-                                int x2 = int(x_orig + 1 - eps);
-                                float coeff = x_orig - x1;
-                                int n_z = int((z_orig + C) / defocus_step);
-                                // the num in the corrected stack for the current height
-                                stack_recon[j][i + k * Nx] +=
-                                        (1 - coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x1] +
-                                        (coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x2];
+                                float x_orig = (float(i) - x_orig_offset) * cos(theta_rad) -
+                                               (float(k) - z_orig_offset) * sin(theta_rad) + x_orig_offset;
+                                float z_orig = (float(i) - x_orig_offset) * sin(theta_rad) +
+                                               (float(k) - z_orig_offset) * cos(theta_rad) + z_orig_offset;
+                                float coeff = x_orig - floor(x_orig);
+                                int n_z = floor(((z_orig - z_orig_offset) + int(h_tilt_max / 2)) /
+                                                defocus_step);    // the num in the corrected stack for the current height
+                                if (n_z >= 0 && n_z < n_zz) {
+                                    if (floor(x_orig) >= 0 && ceil(x_orig) < stack_orig.getNx()) {
+                                        recon_now[i + k * stack_orig.getNx()] = (1 - coeff) * stack_corrected[n_z][
+                                                j * stack_orig.getNx() + int(floor(x_orig))] + (coeff) *
+                                                                                               stack_corrected[n_z][j *
+                                                                                                                    stack_orig.getNx() +
+                                                                                                                    int(ceil(
+                                                                                                                            x_orig))];
+                                    } else {
+                                        recon_now[i + k * stack_orig.getNx()] = 0.0;
+                                    }
+                                } else {
+                                    recon_now[i + k * stack_orig.getNx()] = 0.0;
+                                }
                             }
-
-
+                        }
+                        // loop: Nx*h (whole xz-slice)
+                        for (int i = 0; i < stack_orig.getNx() * h; i++) {
+                            stack_recon[j][i] += recon_now[i];
                         }
                     }
-                    t3 = GetTime();
-                    printf("reconstruction cost %.3f\n", t3 - t2);
-                    cost7 += t3 - t2;
+
+                    delete[] recon_now;
+
                     cout << "\tDone" << endl;
+
+                    for (int n_z = 0; n_z < n_zz; n_z++) {
+                        delete[] stack_corrected[n_z];
+                    }
                 }
             }
             delete[] image_now;
-            printf("image %d cost %.3f\n", n, GetTime() - t1);
+            delete[] image_now_backup;
         }
 
-        t2 = GetTime();
-        delete stack_corrected;
-        t3 = GetTime();
-        cost8 += t3 - t2;
-
-
-        printf("main for cost %.3f\n", GetTime() - t0);
-        printf("init and read cost %.3f\n", cost0);
-        printf("weight cost %.3f\n", cost1);
-        printf("pre bufc cost %.3f\n", cost2);
-        printf("pre atant cost %.3f\n", cost2_5);
-        printf("fftw malloc cost %.3f\n", cost3);
-        printf("hotspots1 cost %.3f\n", cost4);
-        printf("fftw free cost %.3f\n", cost5);
-        printf("bufc free cost %.3f\n", cost6);
-        printf("rebu cost %.3f\n", cost7);
-        printf("stack_corrected free cost %.3f\n", cost8);
-
-
-        double t_write = GetTime();
-        double tw = GetTime();
         // write out final result
         cout << "Wrtie out final reconstruction result:" << endl;
         MRC stack_final(output_mrc.c_str(), "wb");
         stack_final.createMRC_empty(stack_orig.getNx(), h, stack_orig.getNy(), 2); // (x,z,y)
         // loop: Ny (number of xz-slices)
-//#pragma omp parallel for num_threads(threadNumber)
-
         for (int j = 0; j < stack_orig.getNy(); j++) {
             stack_final.write2DIm(stack_recon[j], j);
         }
 
-        printf("write t1 cost %.3f\n", GetTime() - tw);
-        tw = GetTime();
+        // update MRC header
+        int threads = 3;
+        float min_thread[threads], max_thread[threads];
+        double mean_thread[threads];
+        for (int th = 0; th < threads; th++) {
+            min_thread[th] = stack_recon[0][0];
+            max_thread[th] = stack_recon[0][0];
+            mean_thread[th] = 0.0;
+        }
 
-
-
-        float min_thread, max_thread;
-        double mean_thread;
-        min_thread = stack_recon[0][0];
-        max_thread = stack_recon[0][0];
-        mean_thread = 0.0;
-
-#pragma omp parallel for num_threads(threadNumber)
         for (int j = 0; j < stack_orig.getNy(); j++) {
             double mean_now = 0.0;
-            float mis = stack_recon[j][0];
-            float mxs = stack_recon[j][0];
-
             for (int i = 0; i < stack_orig.getNx() * h; i++) {
                 mean_now += stack_recon[j][i];
-                mis = min(mis, stack_recon[j][i]);
-                mxs = max(mxs, stack_recon[j][i]);
+                if (min_thread[j % threads] > stack_recon[j][i]) {
+                    min_thread[j % threads] = stack_recon[j][i];
+                }
+                if (max_thread[j % threads] < stack_recon[j][i]) {
+                    max_thread[j % threads] = stack_recon[j][i];
+                }
             }
-#pragma omp critical
-            {
-                min_thread = min(min_thread, mis);
-                max_thread = max(max_thread, mxs);
-                mean_thread += (mean_now / (stack_orig.getNx() * h));
-            }
-
+            mean_thread[j % threads] += (mean_now / (stack_orig.getNx() * h));
         }
-        float min_all = min_thread;
-        float max_all = max_thread;
-        double mean_all = mean_thread;
-
-
-//        printf("%.7f %.7f %.7f\n", min_all, max_all, mean_all);
-
-        printf("write t4 cost %.3f\n", GetTime() - tw);
-        tw = GetTime();
+        float min_all = min_thread[0];
+        float max_all = max_thread[0];
+        double mean_all = 0;
+        for (int th = 0; th < threads; th++) {
+            mean_all += mean_thread[th];
+            if (min_all > min_thread[th]) {
+                min_all = min_thread[th];
+            }
+            if (max_all < max_thread[th]) {
+                max_all = max_thread[th];
+            }
+        }
         mean_all /= stack_orig.getNy();
         stack_final.computeHeader(pix, false, min_all, max_all, float(mean_all));
 
-        printf("write t5 cost %.3f\n", GetTime() - tw);
-        tw = GetTime();
         for (int j = 0; j < stack_orig.getNy(); j++) {
             delete[] stack_recon[j];
         }
 
-        printf("write t6 cost %.3f\n", GetTime() - tw);
-        tw = GetTime();
-//        stack_final.close();
-        printf("write t7 cost %.3f\n", GetTime() - tw);
-        tw = GetTime();
+        stack_final.close();
         cout << "Done" << endl;
-
-        printf("write part cost %.3f\n", GetTime() - t_write);
 
     }
 
-    stack_orig.
+    stack_orig.close();
 
-            close();
-
-    cout << endl << "Finish reconstruction successfully!" <<
-         endl;
-    cout << "All results save in: " << path << endl <<
-         endl;
-
-    printf("function cost %.3f\n", GetTime() - t_start);
+    cout << endl << "Finish reconstruction successfully!" << endl;
+    cout << "All results save in: " << path << endl << endl;
 
 }

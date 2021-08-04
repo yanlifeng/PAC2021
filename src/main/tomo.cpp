@@ -97,7 +97,7 @@ int main(int argc, char **argv) {
 
     cout << endl << "Finish!" << endl;
     getTime(start_time);
-    printf("tot cost %.5f\n", GetTime2() - t_start);
+    printf("tot cost %.3f\n", GetTime2() - t_start);
 
     return 0;
 }
