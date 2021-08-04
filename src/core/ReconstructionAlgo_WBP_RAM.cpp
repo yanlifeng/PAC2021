@@ -630,10 +630,19 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
     TEND(INPUT)
     TPRINT(INPUT, "Input file and check time is")
 
+    int filter_weighting_1D_many_all = 0 ;
+    int ctf_correction_all = 0;
+    int ctf_now_get_all = 0;
+    int ctf_fftw_all    = 0;
+    int recon_now_all = 0;
+
+
+
     /*
      * stack_orig.getNx()  682
      * stack_orig.getNy()  960
      * stack_orig.getNz()  69
+     * h                   100
      */
     TDEF(Reconstruction_ALL)
     TSTART(Reconstruction_ALL)
@@ -641,9 +650,11 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
     int Ny = stack_orig.getNy();
     int Nz = stack_orig.getNz();
     int Nxc = Nx + 2 - Nx % 2;
-    int filter_weighting_1D_many_all = 0 ;
-    int ctf_correction_all = 0;
-    int recon_now_all = 0;
+
+
+
+
+
     // Reconstruction
     cout << endl << "Reconstruction with (W)BP in RAM:" << endl << endl;
     if (!unrotated_stack)    // input rotated stack (y-axis as tilt axis)
@@ -838,7 +849,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                      *      16及以上线程会导致出粗
                      */
                     // weighting
-                    fftwf_plan_with_nthreads(4);
+                    fftwf_plan_with_nthreads(1);
                     if (!skip_weighting) {
                         cout << "\tStart weighting..." << endl;
 
@@ -874,7 +885,6 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     float defocus2 =  ctf_para[n].getDefocus2();
                     float astig =  ctf_para[n].getAstigmatism();
                     float astig_2 = 2*astig;
-                    __m512 m_astig_2 = _mm512_set1_ps(astig_2);
                     float lambda =  ctf_para[n].getLambda();
                     float phase_shift =  ctf_para[n].getPhaseShift();
                     float w_sin =  ctf_para[n].getWSin();
@@ -882,19 +892,40 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     float A = sqrt(w_sin*w_sin+w_cos*w_cos);
                     float B = atan(w_cos/w_sin);
                     float phase_shift_B = B + phase_shift;
-                    __m512 m_phase_shift_B = _mm512_set1_ps(phase_shift_B);
                     float pix =  ctf_para[n].getPixelSize();
                     float Cs =  ctf_para[n].getCs();
                     float x_real_l = 1.0 / (Nx * pix);
-                    __m512 m_x_real_l=_mm512_set1_ps(x_real_l);
                     float chi_A = M_PI * lambda;
-                    __m512 m_chi_A   = _mm512_set1_ps(chi_A);
                     float chi_B = M_PI_2 * Cs * lambda * lambda * lambda;
-                    __m512 m_chi_B   = _mm512_set1_ps(-chi_B);
                     float df_now_B = (defocus1 - defocus2)*0.5;
-                    __m512 m_df_now_B= _mm512_set1_ps(df_now_B);
                     n_zz += ((zz_r-zz_l-1)/defocus_step+1);
+
+
+//                    __m512 m_astig_2 = _mm512_set1_ps(astig_2);
+//                    __m512 m_phase_shift_B = _mm512_set1_ps(phase_shift_B);
+//                    __m512 m_x_real_l=_mm512_set1_ps(x_real_l);
+//                    __m512 m_chi_A   = _mm512_set1_ps(chi_A);
+//                    __m512 m_df_now_B= _mm512_set1_ps(df_now_B);
+//                    __m512 m_chi_B   = _mm512_set1_ps(-chi_B);
+//                    __m512 m_zero = _mm512_set1_ps(0);
+//                    __m512 m_minus_one = _mm512_set1_ps(-1);
+//                    __m512 m_one  = _mm512_set1_ps(1);
+
+                    float *df_now_B_cos_alpha_astig = new float[(Nxc/2)*Ny];
+                    for (int i=0;i<Ny;i++){
+                        for (int j=0;j<Nxc/2;j++){
+                            df_now_B_cos_alpha_astig[j+i*(Nxc/2)]=df_now_B*cos(atan_pre_2[j+i*(Nxc/2)]-astig_2);
+                        }
+                    }
+
+
+
+
+
+
+
                     fftwf_plan *plan_ifft =  new fftwf_plan[n_zz];
+#pragma omp parallel for
                     for (int n_z=0;n_z<n_zz;n_z++) {
                         plan_ifft[n_z] = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(stack_corrected[n_z]), (float *) stack_corrected[n_z],
                                                           FFTW_ESTIMATE);
@@ -908,6 +939,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     for (int zz = zz_l;
                          zz < zz_r; zz += defocus_step)    // loop over every height (correct with different defocus)
                     {
+                        TDEF(ctf_now_get)
+                        TSTART(ctf_now_get)
                         int n_z = (zz + zz_r) / defocus_step;
 //                        memcpy(stack_corrected[n_z],bufc,Nxc * Ny*sizeof(float));
 //                        fftwf_plan plan_ifft;
@@ -920,13 +953,22 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //                                               flip_contrast, float(zz) + float(defocus_step - 1) / 2,stack_corrected[n_z]);
                         float z_offset = float(zz) + float(defocus_step - 1) * 0.5;
                         float df_now_A = (defocus1 + defocus2 - 2 * z_offset * pix) * 0.5;
-                        __m512 m_df_now_A= _mm512_set1_ps(df_now_A);
+
+//                        __m512 m_df_now_A= _mm512_set1_ps(df_now_A);
+
+
+
                         for (int j = 0; j < Ny; j++) {
                             // loop: Nx+2-Nx%2 (all Fourier components for x-axis)
                             float y=j;
                             float y_norm = (y >= int(ceil(float(Ny + 1) / 2))) ? (y - Ny) : (y);
                             float y_real = float(y_norm) / float(Ny) * (1 / pix);
-                           __m512 m_y_real  = _mm512_set1_ps(y_real);
+
+
+//                            __m512 m_y_real  = _mm512_set1_ps(y_real);
+
+
+
                             // 特殊处理 x_norm = 0
                             {
                                 float ctf_now;
@@ -966,85 +1008,13 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //                                stack_corrected[n_z][1 + j * Nxc] *= ctf_now;
                             }
 
-
-                            int i = 1;
-                            for (;i<=(Nxc/2-1)&15;i++){
-                                //float ctf_now = ctf.computeCTF2D(i / 2, j, Nx, Ny, true, flip_contrast, z_offset);
-                                float ctf_now;
-                                float x_real = x_real_l * i;
-                                float alpha_astig = atan_pre_2[i+j*(Nxc/2)] - astig_2;
-                                float freq2 = x_real * x_real + y_real*y_real;
-                                float df_now = df_now_A + df_now_B * cos(alpha_astig);
-                                float chi = chi_A * df_now * freq2 - chi_B * freq2 * freq2 + phase_shift_B;
-//                              ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
-//                              ctf_now = A*sin(chi);
-                                ctf_now = sin(chi);
-                                if (flip_contrast) {
-                                    ctf_now = -ctf_now;
-                                }
-                                if (ctf_now >= 0){
-                                    stack_corrected[n_z][ i*2 + j * Nxc] *= 1;
-                                    stack_corrected[n_z][(i*2 + 1) + j * Nxc] *= 1;
-                                } else {
-                                    stack_corrected[n_z][i*2 + j * Nxc] *= -1;
-                                    stack_corrected[n_z][(i*2 + 1) + j * Nxc] *= -1;
-                                }
-//                                ctf_now = 1-(int)(((*((unsigned int*)&ctf_now)) >> 31) << 1);
-//                                stack_corrected[n_z][i * 2 + j * Nxc] *= ctf_now;
-//                                stack_corrected[n_z][(i * 2 + 1) + j * Nxc] *= ctf_now;
-                            }
-                            for (; i <= Nxc/2 -1; i +=16) {
-                                //float ctf_now = ctf.computeCTF2D(i / 2, j, Nx, Ny, true, flip_contrast, z_offset);
-
-                                __m512 m_x_real  = _mm512_mul_ps(m_x_real_l,_mm512_set_ps(i+15,i+14,i+13,i+12,i+11,i+10,i+9,i+8,i+7,i+6,i+5,i+4,i+3,i+2,i+1,i));
-                                //float x_real = x_real_l * i;
-
-                                __m512 m_alpha   = _mm512_loadu_ps(atan_pre_2+i+j*(Nxc/2));
-                                __m512 m_alpha_astig = _mm512_mul_ps(m_alpha,m_astig_2);
-                                //float alpha_astig = atan_pre_2[i+j*(Nx/2)] - astig_2;
-
-                                __m512 m_freq2   = _mm512_add_ps(_mm512_mul_ps(m_x_real,m_x_real),_mm512_mul_ps(m_y_real,m_y_real));
-                                //float freq2 = x_real * x_real + y_real*y_real;
-                                m_alpha_astig    = _mm512_cos_ps(m_alpha_astig);
-                                __m512 m_df_now  = _mm512_add_ps(m_df_now_A,_mm512_mul_ps(m_df_now_B,m_alpha_astig));
-//                                float df_now = df_now_A + df_now_B * cos(alpha_astig);
-                                __m512 m_chi_A_now          = _mm512_mul_ps(m_chi_A,_mm512_mul_ps(m_df_now,m_freq2));
-                                __m512 m_chi_B_now          = _mm512_mul_ps(m_chi_B,_mm512_mul_ps(m_freq2,m_freq2));
-                                m_chi_A_now          = _mm512_add_ps(m_chi_A_now,m_chi_B_now);
-                                __m512 m_chi     = _mm512_add_ps(m_chi_A_now,m_phase_shift_B);
-//                                float chi = chi_A * df_now * freq2 - chi_B * freq2 * freq2 + phase_shift_B;
-//                              ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
-//                              ctf_now = A*sin(chi);
-                                __m512 m_ctf_now = _mm512_sin_ps(m_chi);
-//                                ctf_now = sin(chi);
-                                if (flip_contrast) {
-                                    m_ctf_now    = _mm512_mul_ps(m_ctf_now,_mm512_set1_ps(-1));
-//                                    ctf_now = -ctf_now;
-                                }
-                                float *ctf_now_m = new float[16];
-                                _mm512_store_ps(ctf_now_m,m_ctf_now);
-                                for (int ii=0;ii<16;ii++){
-                                    if (ctf_now_m[ii] >= 0){
-                                        stack_corrected[n_z][ (i+ii)*2 + j * Nxc] *= 1;
-                                        stack_corrected[n_z][((i+ii)*2 + 1) + j * Nxc] *= 1;
-                                    } else {
-                                        stack_corrected[n_z][(i+ii)*2 + j * Nxc] *= -1;
-                                        stack_corrected[n_z][((i+ii)*2 + 1) + j * Nxc] *= -1;
-                                    }
-                                }
-
-//                                ctf_now = 1-(int)(((*((unsigned int*)&ctf_now)) >> 31) << 1);
-//                                stack_corrected[n_z][i * 2 + j * Nxc] *= ctf_now;
-//                                stack_corrected[n_z][(i * 2 + 1) + j * Nxc] *= ctf_now;
-                            }
-
-
 //
-//                            for (int i=1; i <= Nxc/2 -1; i ++) {
+//                            int i = 1;
+//                            for (;i<= (Nxc/2-1)%16 ;i++){
 //                                //float ctf_now = ctf.computeCTF2D(i / 2, j, Nx, Ny, true, flip_contrast, z_offset);
 //                                float ctf_now;
 //                                float x_real = x_real_l * i;
-//                                float alpha_astig = atan_pre_2[i+j*(Nx/2)] - astig_2;
+//                                float alpha_astig = atan_pre_2[i+j*(Nxc/2)] - astig_2;
 //                                float freq2 = x_real * x_real + y_real*y_real;
 //                                float df_now = df_now_A + df_now_B * cos(alpha_astig);
 //                                float chi = chi_A * df_now * freq2 - chi_B * freq2 * freq2 + phase_shift_B;
@@ -1065,12 +1035,106 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 ////                                stack_corrected[n_z][i * 2 + j * Nxc] *= ctf_now;
 ////                                stack_corrected[n_z][(i * 2 + 1) + j * Nxc] *= ctf_now;
 //                            }
+//                            for (; i <= Nxc/2 -1; i +=16) {
+//                                //float ctf_now = ctf.computeCTF2D(i / 2, j, Nx, Ny, true, flip_contrast, z_offset);
 //
+//                                __m512 m_x_real  = _mm512_mul_ps(m_x_real_l,_mm512_set_ps(i+15,i+14,i+13,i+12,i+11,i+10,i+9,i+8,i+7,i+6,i+5,i+4,i+3,i+2,i+1,i));
+//                                //float x_real = x_real_l * i;
+//                                __m512 m_freq2   = _mm512_add_ps(_mm512_mul_ps(m_x_real,m_x_real),_mm512_mul_ps(m_y_real,m_y_real));
+//                                //float freq2 = x_real * x_real + y_real*y_real;
+//                                __m512 m_alpha_astig    = _mm512_loadu_ps(df_now_B_cos_alpha_astig+i+j*(Nxc/2));
+//                                __m512 m_df_now  = _mm512_add_ps(m_df_now_A,m_alpha_astig);
+////                                float df_now = df_now_A + df_now_B_cos_alpha_astig[i+j*(Nx/2)];
+//                                __m512 m_chi_A_now          = _mm512_mul_ps(m_chi_A,_mm512_mul_ps(m_df_now,m_freq2));
+//                                __m512 m_chi_B_now          = _mm512_mul_ps(m_chi_B,_mm512_mul_ps(m_freq2,m_freq2));
+//                                m_chi_A_now          = _mm512_add_ps(m_chi_A_now,m_chi_B_now);
+//                                __m512 m_chi     = _mm512_add_ps(m_chi_A_now,m_phase_shift_B);
+////                                float chi = chi_A * df_now * freq2 - chi_B * freq2 * freq2 + phase_shift_B;
+////                              ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
+////                              ctf_now = A*sin(chi);
+//                                __m512 m_ctf_now = _mm512_sin_ps(m_chi);
+////                                ctf_now = sin(chi);
+//                                if (flip_contrast) {
+//                                    m_ctf_now    = _mm512_mul_ps(m_ctf_now,m_minus_one);
+////                                    ctf_now = -ctf_now;
+//                                }
+//                                __mmask16 ctf_now = _mm512_cmp_ps_mask (m_ctf_now, m_zero,_CMP_LT_OS);
+//                                for (int ii=0;ii<16;ii++){
+//                                    if (ctf_now & 1){
+//                                        stack_corrected[n_z][ i*2 + j * Nxc + 2*ii] *= -1;
+//                                        stack_corrected[n_z][(i*2 + 1) + j * Nxc + 2*ii] *= -1;
+//                                    }
+//                                    ctf_now >>=1;
+//                                }
+////                                float *ctf_now_m = new float[16];
+////                                _mm512_store_ps(ctf_now_m,m_ctf_now);
+////                                for (int ii=0;ii<16;ii++){
+////                                    if (ctf_now_m[ii] >= 0){
+////                                        stack_corrected[n_z][ i*2 + j * Nxc + 2*ii] *= 1;
+////                                        stack_corrected[n_z][(i*2 + 1) + j * Nxc + 2*ii] *= 1;
+////                                    } else {
+////                                        stack_corrected[n_z][ i*2 + j * Nxc + 2*ii] *= -1;
+////                                        stack_corrected[n_z][(i*2 + 1) + j * Nxc + 2*ii] *= -1;
+////                                    }
+////                                }
+//
+////                                ctf_now = 1-(int)(((*((unsigned int*)&ctf_now)) >> 31) << 1);
+////                                stack_corrected[n_z][i * 2 + j * Nxc] *= ctf_now;
+////                                stack_corrected[n_z][(i * 2 + 1) + j * Nxc] *= ctf_now;
+//                            }
+
+
+
+                            for (int i=1; i <= Nxc/2 -1; i ++) {
+                                //float ctf_now = ctf.computeCTF2D(i / 2, j, Nx, Ny, true, flip_contrast, z_offset);
+                                float ctf_now;
+                                float x_real = x_real_l * i;
+//                                float alpha_astig = atan_pre_2[i+j*(Nx/2)] - astig_2;
+                                float freq2 = x_real * x_real + y_real*y_real;
+                                float df_now = df_now_A + df_now_B_cos_alpha_astig[i+j*(Nxc/2)];
+                                float chi = chi_A * df_now * freq2 - chi_B * freq2 * freq2 + phase_shift_B;
+//                              ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
+//                              ctf_now = A*sin(chi);
+                                ctf_now = sin(chi);
+                                if (flip_contrast) {
+                                    ctf_now = -ctf_now;
+                                }
+                                if (ctf_now >= 0){
+                                    stack_corrected[n_z][ i*2 + j * Nxc] *= 1;
+                                    stack_corrected[n_z][(i*2 + 1) + j * Nxc] *= 1;
+                                } else {
+                                    stack_corrected[n_z][i*2 + j * Nxc] *= -1;
+                                    stack_corrected[n_z][(i*2 + 1) + j * Nxc] *= -1;
+                                }
+//                                ctf_now = 1-(int)(((*((unsigned int*)&ctf_now)) >> 31) << 1);
+//                                stack_corrected[n_z][i * 2 + j * Nxc] *= ctf_now;
+//                                stack_corrected[n_z][(i * 2 + 1) + j * Nxc] *= ctf_now;
+                            }
+
 
 
                         }
 
+                        TEND(ctf_now_get)
+                        ctf_now_get_all += TINT(ctf_now_get);
+
+
+
+                        TDEF(ctf_fftw)
+                        TSTART(ctf_fftw)
+
+
                         fftwf_execute(plan_ifft[n_z]);
+
+                        TEND(ctf_fftw)
+                        ctf_fftw_all += TINT(ctf_fftw);
+
+
+                        for (int i = 0; i < Nxc * Ny; i++)   // normalization
+                        {
+                            stack_corrected[n_z][i] = stack_corrected[n_z][i] / (Nx * Ny);
+                        }
+
                         //  fft2buf(image, bufc, Nx, Ny);
 //#pragma omp simd
 //                        for (int i = 0; i < Nxc * Ny; i++)   // normalization
@@ -1082,16 +1146,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //                            fftwf_destroy_plan(plan_ifft);
 //                        }
                     }
-#pragma omp parallel for
-                    for (int n_z=0;n_z<n_zz;n_z++){
-//#pragma omp simd
-                        for (int i = 0; i < Nxc * Ny; i++)   // normalization
-                        {
-                            stack_corrected[n_z][i] = stack_corrected[n_z][i] / (Nx * Ny);
-                        }
-                       // fftwf_destroy_plan(plan_ifft[n_z]);
-                    }
 
+#pragma omp parallel for
                     for (int n_z=0;n_z<n_zz;n_z++){
                         fftwf_destroy_plan(plan_ifft[n_z]);
                     }
@@ -1111,6 +1167,15 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
                     TDEF(recon_now)
                     TSTART(recon_now)
+
+//                    __m512 m_cos_theta_rad = _mm512_set1_ps(cos_theta_rad);
+//                    __m512 m_sin_theta_rad = _mm512_set1_ps(sin_theta_rad);
+//                    __m512 m_x_orig_offset = _mm512_set1_ps(x_orig_offset);
+//                    __m512 m_z_orig_offset = _mm512_set1_ps(z_orig_offset);
+//                    __m512 m_h_tilt_max_1_2 = _mm512_set1_ps(-z_orig_offset+float(int(h_tilt_max / 2)));
+//                    __m512 m_defocus_step   = _mm512_set1_ps(1.0/defocus_step);
+
+
                     // loop: Ny (number of xz-slices)
 #pragma omp parallel for
                     for (int j = 0; j < Ny; j++) {
@@ -1136,77 +1201,21 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                             }
                             l=max(l,l1); r=min(r,r1);
 
-                            int i = l;
-                            for (; i <= l -1 +(r - l + 1)&15 ; i++)   // loop for the xz-plane to perform BP
+                            for (int i = l; i <= r ; i++)   // loop for the xz-plane to perform BP
                             {
                                 float x_orig = (float(i) - x_orig_offset) * cos_theta_rad - (float(k) - z_orig_offset) * sin_theta_rad + x_orig_offset;
                                 float z_orig = (float(i) - x_orig_offset) * sin_theta_rad + (float(k) - z_orig_offset) * cos_theta_rad + z_orig_offset;
                                 int x_orig_l = floor(x_orig);
                                 int x_orig_r = ceil(x_orig);
-                                int n_z = (int)((z_orig - z_orig_offset + int(h_tilt_max / 2) ) / defocus_step);    // the num in the corrected stack for the current height
+                                int n_z = (int)((z_orig - z_orig_offset + zz_r ) / defocus_step);    // the num in the corrected stack for the current height
                                 // 上面这行代码一动就精度大问题 例如 int(h_tilt_max / 2) -> zz_r
                                 float coeff = x_orig - x_orig_l;
                                 stack_recon[j][i + k * Nx] += (1 - coeff) * stack_corrected[n_z][j * Nxc + x_orig_l] + (coeff)*stack_corrected[n_z][j*Nxc + x_orig_r];
                             }
-                            for (; i <= r ; i+= 16)   // loop for the xz-plane to perform BP
-                            {
-                                __m512 m_cos_theta_rad = _mm512_set1_ps(cos_theta_rad);
-                                __m512 m_sin_theta_rad = _mm512_set1_ps(sin_theta_rad);
-                                __m512 m_x_orig_offset = _mm512_set1_ps(x_orig_offset);
-                                __m512 m_z_orig_offset = _mm512_set1_ps(z_orig_offset);
-                                __m512 m_orig_a = _mm512_set_ps(i+15 ,i+14,i+13,i+12,i+11,i+10,i+9,i+8,i+7,i+6,i+5,i+4,i+3,i+2,i+1,i);
-                                m_orig_a         = _mm512_sub_ps(m_orig_a,m_x_orig_offset);
-                                __m512 m_orig_b1 = _mm512_set1_ps(float(k) - z_orig_offset);
-                                __m512 m_orig_b2 = _mm512_set1_ps(-float(k) + z_orig_offset);
-                                __m512 m_x_orig  = _mm512_mul_ps(m_orig_a,m_cos_theta_rad);
-                                m_x_orig         = _mm512_add_ps(m_x_orig,_mm512_mul_ps(m_orig_b2,m_sin_theta_rad));
-                                m_x_orig         = _mm512_add_ps(m_x_orig,m_x_orig_offset);
-//                                float x_orig = (float(i) - x_orig_offset) * cos_theta_rad - (float(k) - z_orig_offset) * sin_theta_rad + x_orig_offset;
-                                __m512 m_z_orig  = _mm512_mul_ps(m_orig_a,m_sin_theta_rad);
-                                m_z_orig         = _mm512_add_ps(m_z_orig,_mm512_mul_ps(m_orig_b1,m_cos_theta_rad));
-                                m_z_orig         = _mm512_add_ps(m_z_orig,m_z_orig_offset);
-//                                float z_orig = (float(i) - x_orig_offset) * sin_theta_rad + (float(k) - z_orig_offset) * cos_theta_rad + z_orig_offset;
-                                __m512 m_x_orig_l = _mm512_floor_ps(m_x_orig);
-//                                int x_orig_l = floor(x_orig);
-                                __m512 m_x_orig_r = _mm512_ceil_ps(m_x_orig);
-//                                int x_orig_r = ceil(x_orig);
-                                __m512 m_h_tilt_max_1_2 = _mm512_set1_ps(int(h_tilt_max / 2) + 0.0 - z_orig_offset);
-                                __m512 m_defocus_step   = _mm512_set1_ps(defocus_step);
-                                __m512 m_nz_float       = _mm512_div_ps(_mm512_add_ps(m_z_orig,m_h_tilt_max_1_2),m_defocus_step);
-                                __m512 m_nz_int        = _mm512_floor_ps(m_nz_float);
-                                // __m512i _mm512_castps_si512 (__m512 a)
-                                // int n_z = (int)((z_orig - z_orig_offset + int(h_tilt_max / 2) ) / defocus_step);    // the num in the corrected stack for the current height
-                                // 上面这行代码一动就精度大问题 例如 int(h_tilt_max / 2) -> zz_r
-
-                                __m512 m_coeff  = _mm512_sub_ps(m_x_orig,m_x_orig_l);
-//                                float coeff = x_orig - x_orig_l;
-                                float *coeff = new float[16];
-                                _mm512_store_ps(coeff,m_coeff);
-                                float *n_z = new float[16];
-                                _mm512_store_ps(n_z,m_nz_int);
-                                float *x_orig_l = new float[16];
-                                _mm512_store_ps(x_orig_l,m_x_orig_l);
-                                float *x_orig_r = new float[16];
-                                _mm512_store_ps(x_orig_r,m_x_orig_r);
-                                for (int ii=0;ii<16;ii++){
-                                    stack_recon[j][i+ii + k * Nx] += (1 - coeff[ii]) * stack_corrected[(int)n_z[ii]][j * Nxc + (int)x_orig_l[ii]] + (coeff[ii])*stack_corrected[(int)n_z[ii]][j*Nxc + (int)x_orig_r[ii]];
-                                }
-
-                            }
-//                            printf("\t\ti : %d\t r : %d\n",i,r);
 
 
-//                            for (int i = l; i <= r ; i++)   // loop for the xz-plane to perform BP
-//                            {
-//                                float x_orig = (float(i) - x_orig_offset) * cos_theta_rad - (float(k) - z_orig_offset) * sin_theta_rad + x_orig_offset;
-//                                float z_orig = (float(i) - x_orig_offset) * sin_theta_rad + (float(k) - z_orig_offset) * cos_theta_rad + z_orig_offset;
-//                                int x_orig_l = floor(x_orig);
-//                                int x_orig_r = ceil(x_orig);
-//                                int n_z = (int)((z_orig - z_orig_offset + zz_r ) / defocus_step);    // the num in the corrected stack for the current height
-//                                // 上面这行代码一动就精度大问题 例如 int(h_tilt_max / 2) -> zz_r
-//                                float coeff = x_orig - x_orig_l;
-//                                stack_recon[j][i + k * Nx] += (1 - coeff) * stack_corrected[n_z][j * Nxc + x_orig_l] + (coeff)*stack_corrected[n_z][j*Nxc + x_orig_r];
-//                            }
+
+
                         }
                     }
                     TEND(recon_now)
@@ -1241,6 +1250,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         int threads = 3;
         float min_thread[threads], max_thread[threads];
         double mean_thread[threads];
+#pragma omp parallel for
         for (int th = 0; th < threads; th++) {
             min_thread[th] = stack_recon[0][0];
             max_thread[th] = stack_recon[0][0];
@@ -1262,6 +1272,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         float min_all = min_thread[0];
         float max_all = max_thread[0];
         double mean_all = 0;
+#pragma omp parallel for
         for (int th = 0; th < threads; th++) {
             mean_all += mean_thread[th];
             if (min_all > min_thread[th]) {
@@ -1278,7 +1289,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
             delete[] stack_recon[j];
         }
 
-        stack_final.close();
+        //stack_final.close();
         cout << "Done" << endl;
         TEND(Reconstruction_ALL)
         TPRINT(Reconstruction_ALL, "Reconstruction_ALL time is")
@@ -1292,6 +1303,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
     printf("\t\tfilter weighting 1D many all time is %f s\n",(float)filter_weighting_1D_many_all/1e6);
     printf("\t\tctf correction all time is %f s\n",(float)ctf_correction_all/1e6);
+    printf("\t\t\tctf now get all time is %f s\n",(float)ctf_now_get_all/1e6);
+    printf("\t\t\tctf fftw all time is %f s\n",(float)ctf_fftw_all/1e6);
     printf("\t\trecon now all time is %f s\n",(float)recon_now_all/1e6);
 
 
