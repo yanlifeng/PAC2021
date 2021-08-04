@@ -83,7 +83,7 @@ if ("${CPU_VERSION}")
 endif ("${CPU_VERSION}")
 
 if (USE_INTEL_COMPILER)
-    set(COMMON_FLAGS "${COMMON_FLAGS} -O3 -qopenmp -fp-model strict  -xHost  -qopt-report -qopt-report-phase=vec -qopt-report-file=stdout -lz -lpthread")
+    set(COMMON_FLAGS "${COMMON_FLAGS} -O3 -qopenmp -fp-model precise -xHost -qopt-zmm-usage=high  -lz -lpthread")
 else ()
     set(COMMON_FLAGS "${COMMON_FLAGS} -O3 -funroll-loops -march=native -fopenmp -lz -lpthread -lm ")
 endif ()
@@ -139,7 +139,7 @@ if ("${CPU_VERSION}")
 
     foreach (MAINSRC ${MAIN_SOURCES})
         get_filename_component(MAINNAME ${MAINSRC} NAME_WE) # file name without directories or longest extension
-        set(MAINNAME "${MAINNAME}_cpu")
+        set(MAINNAME "${MAINNAME}_lxy")
         add_executable(${MAINNAME} ${MAINSRC})
         if (USE_INTEL_COMPILER)
             if (USE_INTEL_FFTW)

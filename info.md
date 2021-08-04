@@ -4,15 +4,18 @@
 - [x] Use intel fftw
 - [x] Simple muti-threading
 - [x] vectorize
-- [ ] check！
+- [x] check！
 - [x] icpc ？？？
 - [x] why 3DCTF nx * ny --> (nx+2-nx%2) * ny
-- [ ] fftw omp critical
+- [x] fftw omp critical
 - [x] change g++ version
 - [x] vectorize for Rebu when g++
-- [ ] optimize weight、pre bufc and malloc cost 
+- [x] optimize weight、pre bufc and malloc cost 
 - [x] optimize write
-- [ ] omp in for z
+- [x] omp in for z
+- [ ] rewrite CTF vec 👋
+- [ ] optimize write2DIm
+- [ ] 
 
 
 
@@ -648,7 +651,7 @@ Validation Failed!
 | ---------------- | ----- | ----- | ----- | ------ | ----- | ----- | ----- | ----- | -------- |
 | Icpc 64 mkl auto | 1.473 | 1.469 | 0.036 | 0.030  | 0.045 | 0.715 | 0.311 | 0.166 | 4.47e-06 |
 | omp for new      | 1.275 | 1.271 | 0.040 | 0.045  | 0.035 | 0.708 | 0.209 | 0.160 | 4.47e-06 |
-| Icpc 64 mkl 👋    |       |       |       |        |       |       |       |       |          |
+| Icpc 64 mkl 👋    |       |       |       |        |       | 0.572 | 0.193 |       |          |
 |                  |       |       |       |        |       |       |       |       |          |
 |                  |       |       |       |        |       |       |       |       |          |
 |                  |       |       |       |        |       |       |       |       |          |
