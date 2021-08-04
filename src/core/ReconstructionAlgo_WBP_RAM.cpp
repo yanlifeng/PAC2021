@@ -1201,6 +1201,59 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                             }
                             l=max(l,l1); r=min(r,r1);
 
+//                            __m512 m_orig_b = _mm512_set1_ps(float(k) - z_orig_offset);
+//
+//                            int i = l;
+//                            for (; i <= l+(r - l + 1)%16 -1 ; i++)   // loop for the xz-plane to perform BP
+//                            {
+//                                float x_orig = (float(i) - x_orig_offset) * cos_theta_rad - (float(k) - z_orig_offset) * sin_theta_rad + x_orig_offset;
+//                                float z_orig = (float(i) - x_orig_offset) * sin_theta_rad + (float(k) - z_orig_offset) * cos_theta_rad + z_orig_offset;
+//                                int x_orig_l = floor(x_orig);
+//                                int x_orig_r = ceil(x_orig);
+//                                int n_z = (int)((z_orig - z_orig_offset + int(h_tilt_max / 2) ) / defocus_step);    // the num in the corrected stack for the current height
+//                                // 上面这行代码一动就精度大问题 例如 int(h_tilt_max / 2) -> zz_r
+//                                float coeff = x_orig - x_orig_l;
+//                                stack_recon[j][i + k * Nx] += (1 - coeff) * stack_corrected[n_z][j * Nxc + x_orig_l] + (coeff)*stack_corrected[n_z][j*Nxc + x_orig_r];
+//                            }
+//                            for (; i <= r ; i+= 16)   // loop for the xz-plane to perform BP
+//                            {
+//                                __m512 m_orig_a = _mm512_set_ps(i+15 ,i+14,i+13,i+12,i+11,i+10,i+9,i+8,i+7,i+6,i+5,i+4,i+3,i+2,i+1,i);
+//                                m_orig_a         = _mm512_sub_ps(m_orig_a,m_x_orig_offset);
+//
+//                                __m512 m_x_orig  = _mm512_mul_ps(m_orig_a,m_cos_theta_rad);
+//                                m_x_orig         = _mm512_sub_ps(m_x_orig,_mm512_mul_ps(m_orig_b,m_sin_theta_rad));
+//                                m_x_orig         = _mm512_add_ps(m_x_orig,m_x_orig_offset);
+////                                float x_orig = (float(i) - x_orig_offset) * cos_theta_rad - (float(k) - z_orig_offset) * sin_theta_rad + x_orig_offset;
+//                                __m512 m_z_orig  = _mm512_mul_ps(m_orig_a,m_sin_theta_rad);
+//                                m_z_orig         = _mm512_add_ps(m_z_orig,_mm512_mul_ps(m_orig_b,m_cos_theta_rad));
+//                                m_z_orig         = _mm512_add_ps(m_z_orig,m_z_orig_offset);
+////                                float z_orig = (float(i) - x_orig_offset) * sin_theta_rad + (float(k) - z_orig_offset) * cos_theta_rad + z_orig_offset;
+//                                __m512 m_x_orig_l = m_x_orig;
+////                                int x_orig_l = floor(x_orig);
+//                                __m512 m_x_orig_r = _mm512_add_ps(m_x_orig,m_one);
+////                                int x_orig_r = ceil(x_orig);
+//
+//                                __m512 m_nz_float = _mm512_mul_ps(_mm512_add_ps(m_z_orig,m_h_tilt_max_1_2),m_defocus_step);
+//                                // __m512i _mm512_castps_si512 (__m512 a)
+////                                int n_z = (int)((z_orig - z_orig_offset + int(h_tilt_max / 2) ) / defocus_step);    // the num in the corrected stack for the current height
+//                                // 上面这行代码一动就精度大问题 例如 int(h_tilt_max / 2) -> zz_r
+//
+//                                __m512 m_coeff  = _mm512_sub_ps(m_x_orig,_mm512_floor_ps(m_x_orig));
+////                                float coeff = x_orig - x_orig_l;
+//                                float *coeff = new float[16];
+//                                _mm512_store_ps(coeff,m_coeff);
+//                                int *n_z = new int[16];
+//                                _mm512_store_epi32(n_z,_mm512_cvtps_epu32(m_nz_float));
+//                                int *x_orig_l = new int[16];
+//                                _mm512_store_epi32(x_orig_l,_mm512_cvt_roundps_epi32(m_x_orig,_MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC));
+//                                int *x_orig_r = new int[16];
+//                                _mm512_store_epi32(x_orig_r,_mm512_cvt_roundps_epi32(m_x_orig_r,_MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC));
+//                                for (int ii=0;ii<16;ii++){
+//                                    stack_recon[j][i+ii + k * Nx] += (1 - coeff[ii]) * stack_corrected[n_z[ii]][j * Nxc + x_orig_l[ii]] + (coeff[ii])*stack_corrected[n_z[ii]][j*Nxc + x_orig_r[ii]];
+//                                }
+//
+//                            }
+
                             for (int i = l; i <= r ; i++)   // loop for the xz-plane to perform BP
                             {
                                 float x_orig = (float(i) - x_orig_offset) * cos_theta_rad - (float(k) - z_orig_offset) * sin_theta_rad + x_orig_offset;
@@ -1250,7 +1303,6 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         int threads = 3;
         float min_thread[threads], max_thread[threads];
         double mean_thread[threads];
-#pragma omp parallel for
         for (int th = 0; th < threads; th++) {
             min_thread[th] = stack_recon[0][0];
             max_thread[th] = stack_recon[0][0];
@@ -1272,7 +1324,6 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         float min_all = min_thread[0];
         float max_all = max_thread[0];
         double mean_all = 0;
-#pragma omp parallel for
         for (int th = 0; th < threads; th++) {
             mean_all += mean_thread[th];
             if (min_all > min_thread[th]) {
@@ -1289,7 +1340,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
             delete[] stack_recon[j];
         }
 
-        //stack_final.close();
+//        stack_final.close();
         cout << "Done" << endl;
         TEND(Reconstruction_ALL)
         TPRINT(Reconstruction_ALL, "Reconstruction_ALL time is")
