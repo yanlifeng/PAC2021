@@ -874,7 +874,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     __m512 neg_one = _mm512_set1_ps(-1);
                     __m512d a_w_cos_con = _mm512_set1_pd(a_w_cos);
                     __m512i si_con = _mm512_set1_epi32(16);
-                    __m512 xor_neg = _mm512_set1_ps(0x80000000);
+                    __m512i xor_neg = _mm512_set1_epi32(0x80000000);
 
 #pragma omp parallel for num_threads(threadNumber)
                     for (int zz = zl; zz < zr; zz += defocus_step) {
@@ -1010,65 +1010,10 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
                                 __m512 img1 = _mm512_load_ps(image + j * Nx2 + i * 2);
                                 __m512 img2 = _mm512_load_ps(image + j * Nx2 + i * 2 + 16);
-
-//                                if (big_base0 && big_base1) {
-//                                    float img1_tmp[16];
-//                                    _mm512_store_ps(img1_tmp, img1);
-//                                    printf("img1 before:\n");
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        printf("%.3f ", img1_tmp[ii]);
-//                                    }
-//                                    cout << endl;
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        if ((big_base0 >> ii) & 1) {
-//                                            printf("1 %.3f ", float((unsigned int) img1_tmp[ii] ^ (0x80000000)));
-//                                        } else {
-//                                            printf("0 %.3f ", img1_tmp[ii]);
-//                                        }
-//                                    }
-//                                    cout << endl;
-//
-//                                    float img2_tmp[16];
-//                                    printf("img2 before:\n");
-//                                    _mm512_store_ps(img2_tmp, img2);
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        printf("%.3f ", img2_tmp[ii]);
-//                                    }
-//                                    cout << endl;
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        if ((big_base1 >> ii) & 1) {
-//                                            ((unsigned char *) &img2_tmp[ii])[0] ^= 0x80;
-//                                            printf("1 %.3f ", img2_tmp[ii]);
-//                                        } else {
-//                                            printf("0 %.3f ", img2_tmp[ii]);
-//                                        }
-//                                    }
-//                                    cout << endl;
-//
-//                                    cout << "-------------" << endl;
-//
-//
-//                                    img1 = _mm512_mask_xor_ps(img1, big_base0, img1, xor_neg);
-//                                    _mm512_store_ps(img1_tmp, img1);
-//                                    printf("img1 after:\n");
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        printf("%.3f ", img1_tmp[ii]);
-//                                    }
-//                                    cout << endl;
-//
-//
-//                                    img2 = _mm512_mask_xor_ps(img2, big_base1, img2, xor_neg);
-//
-//                                    _mm512_store_ps(img2_tmp, img2);
-//                                    printf("img2 after:\n");
-//                                    for (int ii = 0; ii < 16; ii++) {
-//                                        printf("%.3f ", img2_tmp[ii]);
-//                                    }
-//                                    cout << endl;
-//                                    exit(0);
-//                                }
-                                img1 = _mm512_mask_sub_ps(img1, big_base0, zero_con, img1);
-                                img2 = _mm512_mask_sub_ps(img2, big_base1, zero_con, img2);
+                                img1 = _mm512_mask_xor_ps(img1, big_base0, img1, __m512(xor_neg));
+                                img2 = _mm512_mask_xor_ps(img2, big_base1, img2, __m512(xor_neg));
+//                                img1 = _mm512_mask_sub_ps(img1, big_base0, zero_con, img1);
+//                                img2 = _mm512_mask_sub_ps(img2, big_base1, zero_con, img2);
                                 _mm512_store_ps(image + j * Nx2 + i * 2, img1);
                                 _mm512_store_ps(image + j * Nx2 + i * 2 + 16, img2);
 //                                for (int ii = 0; ii < 16; ii++) {
@@ -1499,7 +1444,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         // write out final result
         cout << "Wrtie out final reconstruction result:" << endl;
         string outdir = "/dev/shm/" + output_mrc;
-        MRC stack_final(outdir.c_str(), "wb");
+//        MRC stack_final(outdir.c_str(), "wb");
+        MRC stack_final(output_mrc.c_str(), "wb");
 
         stack_final.createMRC_empty(stack_orig.getNx(), h, stack_orig.getNy(), 2); // (x,z,y)
         // loop: Ny (number of xz-slices)
