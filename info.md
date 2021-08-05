@@ -13,8 +13,8 @@
 - [x] optimize weight、pre bufc and malloc cost 
 - [x] optimize write
 - [x] omp in for z
-- [ ] rewrite CTF vec 👋
-- [ ] optimize write2DIm
+- [x] rewrite CTF vec 👋
+- [x] optimize write2DIm
 - [ ] 
 
 
@@ -640,7 +640,7 @@ Validation Failed!
 
 - [x] 去掉fp-model，更换fp-model
 - [x] 自动向量化
-- [ ] 重写向量化
+- [x] 重写向量化
 - [x] cos->float
 - [ ] g++
 - [x] mkl fftw threads

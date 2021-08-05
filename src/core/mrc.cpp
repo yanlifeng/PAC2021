@@ -158,6 +158,10 @@ float MRC::getMean() {
     return m_header.dmean;
 }
 
+FILE *MRC::getfp() {
+    return m_fp;
+}
+
 int MRC::readAllData(void *buf) {
     int ImSize = getNx() * getNy() * getNz() * getWordLength();
     long offset = 1024 + getSymdatasize();

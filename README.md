@@ -13,8 +13,8 @@
 - [x] optimize weight、pre bufc and malloc cost 
 - [x] optimize write
 - [x] omp in for z
-- [ ] rewrite CTF vec 👋
-- [ ] optimize write2DIm
+- [x] rewrite CTF vec 👋
+- [x] optimize write2DIm
 - [ ] 
 
 

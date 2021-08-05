@@ -589,12 +589,19 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
         cout << "Using rotated stack" << endl;
 
-        float *stack_recon[stack_orig.getNy()]; // (x,z,y)
+//        float *stack_recon[stack_orig.getNy()]; // (x,z,y)
+//#pragma omp parallel for num_threads(threadNumber)
+//        for (int j = 0; j < stack_orig.getNy(); j++) {
+//            stack_recon[j] = new float[stack_orig.getNx() * h];
+//            for (int i = 0; i < stack_orig.getNx() * h; i++) {
+//                stack_recon[j][i] = 0.0;
+//            }
+//        }
+        float *stack_recon = new float[stack_orig.getNy() * stack_orig.getNx() * h]; // (x,z,y)
 #pragma omp parallel for num_threads(threadNumber)
         for (int j = 0; j < stack_orig.getNy(); j++) {
-            stack_recon[j] = new float[stack_orig.getNx() * h];
             for (int i = 0; i < stack_orig.getNx() * h; i++) {
-                stack_recon[j][i] = 0.0;
+                stack_recon[j * stack_orig.getNx() * h + i] = 0.0;
             }
         }
 
@@ -725,7 +732,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     }
                     // loop: Nx*h (whole xz-slice)
                     for (int i = 0; i < stack_orig.getNx() * h; i++) {
-                        stack_recon[j][i] += recon_now[i];
+                        stack_recon[j * Ny * h + i] += recon_now[i];
                     }
                 }
 
@@ -792,7 +799,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                         }
                         // loop: Nx*h (whole xz-slice)
                         for (int i = 0; i < stack_orig.getNx() * h; i++) {
-                            stack_recon[j][i] += recon_now[i];
+                            stack_recon[j * Nx * h + i] += recon_now[i];
                         }
                     }
 
@@ -861,11 +868,13 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     cost3 += t3 - t2;
                     t2 = GetTime();
 
+                    __m512 zero_con = _mm512_set1_ps(0);
                     __m512 ofive = _mm512_set1_ps(0.5);
                     __m512 two_con = _mm512_set1_ps(2);
                     __m512 neg_one = _mm512_set1_ps(-1);
                     __m512d a_w_cos_con = _mm512_set1_pd(a_w_cos);
                     __m512i si_con = _mm512_set1_epi32(16);
+                    __m512 xor_neg = _mm512_set1_ps(0x80000000);
 
 #pragma omp parallel for num_threads(threadNumber)
                     for (int zz = zl; zz < zr; zz += defocus_step) {
@@ -906,13 +915,17 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                         __m512 mul_tmp2 = _mm512_set1_ps(M_PI_2 * Cs * lambda * lambda * lambda);
                         __m512 phase_shift_con = _mm512_set1_ps(phase_shift);
 
+                        __m512 sin2ast_con = _mm512_set1_ps(sin2ast);
+                        __m512 cos2ast_con = _mm512_set1_ps(cos2ast);
+
+
                         for (int j = 0; j < Ny; j++) {
 
                             float y_norm = (j >= Nyh) ? (j - Ny) : (j);
                             float y_real = float(y_norm) / float(Ny) * (1 / pix);
 
 
-                            __m512i idx = _mm512_set_epi32(16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1);
+                            __m512i idx = _mm512_set_epi32(15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
                             __m512i jNx_con = _mm512_set1_epi32(j * Nx);
                             __m512i jNx2_con = _mm512_set1_epi32(j * Nx2);
                             __m512 y_real_con = _mm512_set1_ps(y_real);
@@ -941,7 +954,12 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //                                    float df_now = (A + (defocus1 - defocus2) * float(cos(2 * (alpha - astig)))) * 0.5;
 //                                __m512 cos_tmp = _mm512_cos_ps(
 //                                        _mm512_mul_ps(two_con, _mm512_sub_ps(alpha, astig_con)));
-                                __m512 cos_tmp = _mm512_set1_ps(0);
+//                                __m512 cos_tmp = zero_con;
+
+//                                cos_atan_xy[j * Nx + i] * cos2ast + sin_atan_xy[j * Nx + i] * sin2ast
+                                __m512 cos_tmp = _mm512_add_ps(
+                                        _mm512_mul_ps(_mm512_load_ps(cos_atan_xy + j * Nx + i), cos2ast_con),
+                                        _mm512_mul_ps(_mm512_load_ps(sin_atan_xy + j * Nx + i), sin2ast_con));
                                 //TODO why _mm512_cosh_ps get wrong answer
 
                                 __m512 df_now = _mm512_mul_ps(_mm512_add_ps(a_con, _mm512_mul_ps(d1_d2, cos_tmp)),
@@ -990,24 +1008,81 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 __mmask16 big_base0 = mak_pre[mul_base0];
                                 __mmask16 big_base1 = mak_pre[mul_base1];
 
-//                                __m512 img1 = _mm512_load_ps(image + j * Nx2 + i * 2);
-//                                __m512 img2 = _mm512_load_ps(image + j * Nx2 + i * 2 + 16);
-//                                img1 = _mm512_mask_sub_ps(img1, big_base0, _mm512_set1_ps(0), img1);
-//                                img2 = _mm512_mask_sub_ps(img2, big_base1, _mm512_set1_ps(0), img2);
-//                                _mm512_store_ps(image + j * Nx2 + i * 2, img1);
-//                                _mm512_store_ps(image + j * Nx2 + i * 2 + 16, img2);
-                                for (int ii = 0; ii < 16; ii++) {
-                                    int idi = i * 2 + ii;
-                                    if ((big_base0 >> ii) & 1) {
-                                        image[idi + j * Nx2] *= -1;
-                                    }
-                                }
-                                for (int ii = 0; ii < 16; ii++) {
-                                    int idi = i * 2 + ii + 16;
-                                    if ((big_base1 >> ii) & 1) {
-                                        image[idi + j * Nx2] *= -1;
-                                    }
-                                }
+                                __m512 img1 = _mm512_load_ps(image + j * Nx2 + i * 2);
+                                __m512 img2 = _mm512_load_ps(image + j * Nx2 + i * 2 + 16);
+
+//                                if (big_base0 && big_base1) {
+//                                    float img1_tmp[16];
+//                                    _mm512_store_ps(img1_tmp, img1);
+//                                    printf("img1 before:\n");
+//                                    for (int ii = 0; ii < 16; ii++) {
+//                                        printf("%.3f ", img1_tmp[ii]);
+//                                    }
+//                                    cout << endl;
+//                                    for (int ii = 0; ii < 16; ii++) {
+//                                        if ((big_base0 >> ii) & 1) {
+//                                            printf("1 %.3f ", float((unsigned int) img1_tmp[ii] ^ (0x80000000)));
+//                                        } else {
+//                                            printf("0 %.3f ", img1_tmp[ii]);
+//                                        }
+//                                    }
+//                                    cout << endl;
+//
+//                                    float img2_tmp[16];
+//                                    printf("img2 before:\n");
+//                                    _mm512_store_ps(img2_tmp, img2);
+//                                    for (int ii = 0; ii < 16; ii++) {
+//                                        printf("%.3f ", img2_tmp[ii]);
+//                                    }
+//                                    cout << endl;
+//                                    for (int ii = 0; ii < 16; ii++) {
+//                                        if ((big_base1 >> ii) & 1) {
+//                                            ((unsigned char *) &img2_tmp[ii])[0] ^= 0x80;
+//                                            printf("1 %.3f ", img2_tmp[ii]);
+//                                        } else {
+//                                            printf("0 %.3f ", img2_tmp[ii]);
+//                                        }
+//                                    }
+//                                    cout << endl;
+//
+//                                    cout << "-------------" << endl;
+//
+//
+//                                    img1 = _mm512_mask_xor_ps(img1, big_base0, img1, xor_neg);
+//                                    _mm512_store_ps(img1_tmp, img1);
+//                                    printf("img1 after:\n");
+//                                    for (int ii = 0; ii < 16; ii++) {
+//                                        printf("%.3f ", img1_tmp[ii]);
+//                                    }
+//                                    cout << endl;
+//
+//
+//                                    img2 = _mm512_mask_xor_ps(img2, big_base1, img2, xor_neg);
+//
+//                                    _mm512_store_ps(img2_tmp, img2);
+//                                    printf("img2 after:\n");
+//                                    for (int ii = 0; ii < 16; ii++) {
+//                                        printf("%.3f ", img2_tmp[ii]);
+//                                    }
+//                                    cout << endl;
+//                                    exit(0);
+//                                }
+                                img1 = _mm512_mask_sub_ps(img1, big_base0, zero_con, img1);
+                                img2 = _mm512_mask_sub_ps(img2, big_base1, zero_con, img2);
+                                _mm512_store_ps(image + j * Nx2 + i * 2, img1);
+                                _mm512_store_ps(image + j * Nx2 + i * 2 + 16, img2);
+//                                for (int ii = 0; ii < 16; ii++) {
+//                                    int idi = i * 2 + ii;
+//                                    if ((big_base0 >> ii) & 1) {
+//                                        image[idi + j * Nx2] *= -1;
+//                                    }
+//                                }
+//                                for (int ii = 0; ii < 16; ii++) {
+//                                    int idi = i * 2 + ii + 16;
+//                                    if ((big_base1 >> ii) & 1) {
+//                                        image[idi + j * Nx2] *= -1;
+//                                    }
+//                                }
 
 //                                for (int ii = 0; ii < 16; ii++) {
 //                                    int idi = i + ii;
@@ -1102,13 +1177,13 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 ////                                float df_now = (A + (defocus1 - defocus2) * (cos(2 * (alpha - astig)))) / 2.0;
 //
 ////                                float df_now = (A + (defocus1 - defocus2) * mycos(2 * (alpha - astig))) / 2.0;
-//                                float chi = (M_PI) * lambda * df_now * freq2 -
-//                                            (M_PI_2) * Cs * lambda * lambda * lambda * freq2 * freq2
-//                                            + phase_shift - a_w_cos;
-//
+//                                float chi = float(M_PI) * lambda * df_now * freq2 -
+//                                            float(M_PI_2) * Cs * lambda * lambda * lambda * freq2 * freq2
+//                                            + phase_shift;
+//                                double rrr = chi - a_w_cos;
 //                                int mul_base = 1;
 //                                //TODO check if rrr will bigger than 2*pi
-//                                if (fabs(chi) > M_PI_2)mul_base = -1;
+//                                if (fabs(rrr) > M_PI_2)mul_base = -1;
 //                                if (flip_contrast) {
 //                                    mul_base = -mul_base;
 //                                }
@@ -1126,7 +1201,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //                        for (int i = 0; i < Nx2 * Ny; i++)image[i] = image[i] / (Nx * Ny);
 //                        n_zz_thread[thread_id]++;
 //                    }
-//
+
 
                     for (int i = 0; i < threadNumber; i++) {
                         n_zz += n_zz_thread[i];
@@ -1301,7 +1376,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 __m512 c1 = _mm512_mul_ps(coeff, cc1);
 
 
-                                float *p_now = stack_recon[j] + k * Nx + i;
+//                                float *p_now = stack_recon[j] + k * Nx + i;
+                                float *p_now = stack_recon + j * Nx * h + k * Nx + i;
                                 __m512 tmplod = _mm512_load_ps(p_now);
 
                                 //last baba
@@ -1328,7 +1404,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 float coeff = x_orig - x1;
                                 int n_z = int((z_orig + C) / defocus_step);
                                 // the num in the corrected stack for the current height
-                                stack_recon[j][i + k * Nx] +=
+                                stack_recon[j * Nx * h + i + k * Nx] +=
                                         (1 - coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x1] +
                                         (coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x2];
                             }
@@ -1338,7 +1414,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     }
 
 
-
+//
 //#pragma omp parallel for num_threads(threadNumber)
 //                    for (int j = 0; j < Ny; j++) {
 //
@@ -1380,7 +1456,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //                                float coeff = x_orig - x1;
 //                                int n_z = int((z_orig + C) / defocus_step);
 //                                // the num in the corrected stack for the current height
-//                                stack_recon[j][i + k * Nx] +=
+//                                stack_recon[j * Nx * h + i + k * Nx] +=
 //                                        (1 - coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x1] +
 //                                        (coeff) * stack_corrected[n_z * Nx2 * Ny + j * Nx2 + x2];
 //                            }
@@ -1423,34 +1499,41 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         // write out final result
         cout << "Wrtie out final reconstruction result:" << endl;
         MRC stack_final(output_mrc.c_str(), "wb");
+
         stack_final.createMRC_empty(stack_orig.getNx(), h, stack_orig.getNy(), 2); // (x,z,y)
         // loop: Ny (number of xz-slices)
-//#pragma omp parallel for num_threads(threadNumber)
 
-        for (int j = 0; j < stack_orig.getNy(); j++) {
-            stack_final.write2DIm(stack_recon[j], j);
+        size_t ImSize = (size_t) stack_final.getImSize() * Ny;
+        size_t offset = 1024 + stack_final.getSymdatasize();
+
+        printf("ImSize %lld\n", 1ll * stack_final.getImSize() * Ny);
+        printf("ImSize %zu\n", ImSize);
+
+        if (fseek(stack_final.getfp(), offset, SEEK_SET) != 0) {
+            printf("GG\n");
         }
 
+        fwrite(stack_recon, 1, ImSize, stack_final.getfp());
         printf("write t1 cost %.3f\n", GetTime() - tw);
         tw = GetTime();
 
 
         float min_thread, max_thread;
         double mean_thread;
-        min_thread = stack_recon[0][0];
-        max_thread = stack_recon[0][0];
+        min_thread = stack_recon[0];
+        max_thread = stack_recon[0];
         mean_thread = 0.0;
 
 #pragma omp parallel for num_threads(threadNumber)
         for (int j = 0; j < stack_orig.getNy(); j++) {
             double mean_now = 0.0;
-            float mis = stack_recon[j][0];
-            float mxs = stack_recon[j][0];
+            float mis = stack_recon[j * Nx * h + 0];
+            float mxs = stack_recon[j * Nx * h + 0];
 
             for (int i = 0; i < stack_orig.getNx() * h; i++) {
-                mean_now += stack_recon[j][i];
-                mis = min(mis, stack_recon[j][i]);
-                mxs = max(mxs, stack_recon[j][i]);
+                mean_now += stack_recon[j * Nx * h + i];
+                mis = min(mis, stack_recon[j * Nx * h + i]);
+                mxs = max(mxs, stack_recon[j * Nx * h + i]);
             }
 #pragma omp critical
             {
@@ -1472,13 +1555,13 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
         printf("write t5 cost %.3f\n", GetTime() - tw);
         tw = GetTime();
-        for (int j = 0; j < stack_orig.getNy(); j++) {
-            delete[] stack_recon[j];
-        }
-
+//        for (int j = 0; j < stack_orig.getNy(); j++) {
+//            delete[] stack_recon[j];
+//        }
+        delete[] stack_recon;
         printf("write t6 cost %.3f\n", GetTime() - tw);
         tw = GetTime();
-//        stack_final.close();
+        stack_final.close();
         printf("write t7 cost %.3f\n", GetTime() - tw);
         tw = GetTime();
         cout << "Done" << endl;
@@ -1487,9 +1570,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
     }
 
-    stack_orig.
-
-            close();
+    stack_orig.close();
 
     cout << endl << "Finish reconstruction successfully!" <<
          endl;
