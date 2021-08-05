@@ -655,3 +655,29 @@ Validation Failed!
 |                  |       |       |       |        |       |       |       |       |          |
 |                  |       |       |       |        |       |       |       |       |          |
 |                  |       |       |       |        |       |       |       |       |          |
+
+## 0805
+
+关于写文件的优化，第一个策略是把Ny次合成一次，第二个就是关于close同步的时候，把结果写到shm中，然后再cpoy到数据目录。
+
+```
+#!/bin/bash
+#SBATCH -p comp
+#SBATCH -N 1
+#SBATCH --exclusive
+testpath=./
+
+cd $testpath
+binPath=../../WBP/build
+tomoBin=$binPath/tomo_lxy
+paraPath=./para_reconstruction_proteasome_WBP_bin6.conf
+ $tomoBin $paraPath
+mv /dev/shm/pro_novpp_Cor2_WBP_bin6.rec ./
+```
+
+
+
+| Verison                       | total | func  | read  | Weight | bufc  | CTF   | rebu  | write | Error    |
+| ----------------------------- | ----- | ----- | ----- | ------ | ----- | ----- | ----- | ----- | -------- |
+| Icpc 64 mkl 👋 +optimize write | 1.192 | 1.188 | 0.036 | 0.030  | 0.045 | 0.653 | 0.261 | 0.082 | 4.47e-06 |
+|                               |       |       |       |        |       |       |       |       |          |

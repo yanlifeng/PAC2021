@@ -1498,11 +1498,12 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         double tw = GetTime();
         // write out final result
         cout << "Wrtie out final reconstruction result:" << endl;
-        MRC stack_final(output_mrc.c_str(), "wb");
+        string outdir = "/dev/shm/" + output_mrc;
+        MRC stack_final(outdir.c_str(), "wb");
 
         stack_final.createMRC_empty(stack_orig.getNx(), h, stack_orig.getNy(), 2); // (x,z,y)
         // loop: Ny (number of xz-slices)
-
+        printf("outdir %s\n", outdir.c_str());
         size_t ImSize = (size_t) stack_final.getImSize() * Ny;
         size_t offset = 1024 + stack_final.getSymdatasize();
 
@@ -1513,7 +1514,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
             printf("GG\n");
         }
 
-        fwrite(stack_recon, 1, ImSize, stack_final.getfp());
+        int res = fwrite(stack_recon, 1, ImSize, stack_final.getfp());
+        printf("res %d\n", res);
         printf("write t1 cost %.3f\n", GetTime() - tw);
         tw = GetTime();
 
