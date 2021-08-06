@@ -662,9 +662,9 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         cout << "Using rotated stack" << endl;
 
         float *stack_recon[Ny]; // (x,z,y)
+#pragma omp parallel for
         for (int j = 0; j < Ny; j++) {
             stack_recon[j] = new float[Nx * h];
-#pragma omp parallel for
             for (int i = 0; i < Nx * h; i++) {
                 stack_recon[j][i] = 0.0;
             }
@@ -678,7 +678,6 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         for (int i=0;i<Ny;i++){
             int y = i;
             float y_norm = (y >= int(ceil(float(Ny + 1) / 2))) ? (y - Ny) : (y);
-#pragma omp simd
             for (int j=0;j<Nxc/2;j++){
                 atan_pre_2[j+i*(Nxc/2)] = 2 * atan(y_norm / j * Nx / Ny);
             }
@@ -911,6 +910,9 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //                    __m512 m_minus_one = _mm512_set1_ps(-1);
 //                    __m512 m_one  = _mm512_set1_ps(1);
 
+/*
+ *  此处并行会导致精度问题，随机误差，可能跟向量化有关
+ */
                     float *df_now_B_cos_alpha_astig = new float[(Nxc/2)*Ny];
                     for (int i=0;i<Ny;i++){
                         for (int j=0;j<Nxc/2;j++){
@@ -927,12 +929,9 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     fftwf_plan *plan_ifft =  new fftwf_plan[n_zz];
 #pragma omp parallel for
                     for (int n_z=0;n_z<n_zz;n_z++) {
+                        memcpy(stack_corrected[n_z],bufc,Nxc * Ny*sizeof(float));
                         plan_ifft[n_z] = fftwf_plan_dft_c2r_2d(Ny, Nx, reinterpret_cast<fftwf_complex *>(stack_corrected[n_z]), (float *) stack_corrected[n_z],
                                                           FFTW_ESTIMATE);
-                    }
-#pragma omp parallel for
-                    for (int n_z=0;n_z<n_zz;n_z++) {
-                        memcpy(stack_corrected[n_z],bufc,Nxc * Ny*sizeof(float));
                     }
                     // defocus1,defocus2,astig,lamba,phase_shift,w_sin,w_cos,pix,Cs
 #pragma omp parallel for
@@ -992,7 +991,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                             chi_B * freq2 * freq2 + phase_shift_B;
 //                                ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
 //                                ctf_now = A*sin(chi);
-                                ctf_now = sin(chi);
+                                ctf_now = A*sin(chi);
                                 if (flip_contrast) {
                                     ctf_now = -ctf_now;
                                 }
@@ -1095,7 +1094,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 float chi = chi_A * df_now * freq2 - chi_B * freq2 * freq2 + phase_shift_B;
 //                              ctf_now = w_sin * sin(chi) + w_cos * cos(chi);
 //                              ctf_now = A*sin(chi);
-                                ctf_now = sin(chi);
+                                ctf_now = A*sin(chi);
                                 if (flip_contrast) {
                                     ctf_now = -ctf_now;
                                 }
@@ -1300,47 +1299,66 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         }
 
         // update MRC header
-        int threads = 3;
-        float min_thread[threads], max_thread[threads];
-        double mean_thread[threads];
-        for (int th = 0; th < threads; th++) {
-            min_thread[th] = stack_recon[0][0];
-            max_thread[th] = stack_recon[0][0];
-            mean_thread[th] = 0.0;
-        }
+
+        double min_all,max_all,mean_all;
+        min_all = stack_recon[0][0];
+        max_all = stack_recon[0][0];
+        mean_all = 0.0;
+//#pragma omp parallel for  reduction(min:min_all) reduction(max:max_all) reduction(+:mean_all)
         for (int j = 0; j < Ny; j++) {
-            double mean_now = 0.0;
             for (int i = 0; i < stack_orig.getNx() * h; i++) {
-                mean_now += stack_recon[j][i];
-                if (min_thread[j % threads] > stack_recon[j][i]) {
-                    min_thread[j % threads] = stack_recon[j][i];
-                }
-                if (max_thread[j % threads] < stack_recon[j][i]) {
-                    max_thread[j % threads] = stack_recon[j][i];
-                }
+                mean_all += stack_recon[j][i];
+                min_all  = fmin(min_all,stack_recon[j][i]);
+                max_all  = fmax(max_all,stack_recon[j][i]);
             }
-            mean_thread[j % threads] += (mean_now / (stack_orig.getNx() * h));
+//            mean_thread[j % threads] += (mean_now / (stack_orig.getNx() * h));
         }
-        float min_all = min_thread[0];
-        float max_all = max_thread[0];
-        double mean_all = 0;
-        for (int th = 0; th < threads; th++) {
-            mean_all += mean_thread[th];
-            if (min_all > min_thread[th]) {
-                min_all = min_thread[th];
-            }
-            if (max_all < max_thread[th]) {
-                max_all = max_thread[th];
-            }
-        }
-        mean_all /= Ny;
+        mean_all /= Ny * stack_orig.getNx() * h;
         stack_final.computeHeader(pix, false, min_all, max_all, float(mean_all));
+
+
+
+//        int threads = 3;
+//        float min_thread[threads], max_thread[threads];
+//        double mean_thread[threads];
+//        for (int th = 0; th < threads; th++) {
+//            min_thread[th] = stack_recon[0][0];
+//            max_thread[th] = stack_recon[0][0];
+//            mean_thread[th] = 0.0;
+//        }
+//        for (int j = 0; j < Ny; j++) {
+//            double mean_now = 0.0;
+//            for (int i = 0; i < stack_orig.getNx() * h; i++) {
+//                mean_now += stack_recon[j][i];
+//                if (min_thread[j % threads] > stack_recon[j][i]) {
+//                    min_thread[j % threads] = stack_recon[j][i];
+//                }
+//                if (max_thread[j % threads] < stack_recon[j][i]) {
+//                    max_thread[j % threads] = stack_recon[j][i];
+//                }
+//            }
+//            mean_thread[j % threads] += (mean_now / (stack_orig.getNx() * h));
+//        }
+//        float min_all = min_thread[0];
+//        float max_all = max_thread[0];
+//        double mean_all = 0;
+//        for (int th = 0; th < threads; th++) {
+//            mean_all += mean_thread[th];
+//            if (min_all > min_thread[th]) {
+//                min_all = min_thread[th];
+//            }
+//            if (max_all < max_thread[th]) {
+//                max_all = max_thread[th];
+//            }
+//        }
+//        mean_all /= Ny;
+//        stack_final.computeHeader(pix, false, min_all, max_all, float(mean_all));
 
         for (int j = 0; j < Ny; j++) {
             delete[] stack_recon[j];
         }
 
-//        stack_final.close();
+        stack_final.close();
         cout << "Done" << endl;
         TEND(Reconstruction_ALL)
         TPRINT(Reconstruction_ALL, "Reconstruction_ALL time is")
