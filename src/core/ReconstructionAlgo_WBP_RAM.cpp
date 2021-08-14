@@ -911,11 +911,17 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                         __m512d M_PI_2_con = _mm512_set1_pd(M_PI_2);
                         __m512d M_PI_23_con = _mm512_set1_pd(M_PI_2 * 3);
                         __m512d M_PI_22con = _mm512_set1_pd(2 * M_PI);
+                        __m512d M_PI_22con_div = _mm512_set1_pd(1.0 / 2 / M_PI);
 
 
                         //TODO
                         __m512 mul_tmp1 = _mm512_set1_ps(M_PI * lambda);
                         __m512 mul_tmp2 = _mm512_set1_ps(M_PI_2 * Cs * lambda * lambda * lambda);
+                        __m512d mul_tmp1d = _mm512_set1_pd(M_PI * lambda);
+                        __m512d mul_tmp2d = _mm512_set1_pd(M_PI_2 * Cs * lambda * lambda * lambda);
+
+
+                        __m512d phase_shift_cond = _mm512_set1_pd(phase_shift);
                         __m512 phase_shift_con = _mm512_set1_ps(phase_shift);
 
                         __m512 sin2ast_con = _mm512_set1_ps(sin2ast);
@@ -967,27 +973,47 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
                                 __m512 df_now = _mm512_mul_ps(_mm512_add_ps(a_con, _mm512_mul_ps(d1_d2, cos_tmp)),
                                                               ofive);
+                                __m256 f0 = _mm512_extractf32x8_ps(df_now, 0);
+                                __m256 f1 = _mm512_extractf32x8_ps(df_now, 1);
+                                __m512d df_now1 = _mm512_cvtps_pd(f0);
+                                __m512d df_now2 = _mm512_cvtps_pd(f1);
+                                f0 = _mm512_extractf32x8_ps(freq2, 0);
+                                f1 = _mm512_extractf32x8_ps(freq2, 1);
+                                __m512d freq21 = _mm512_cvtps_pd(f0);
+                                __m512d freq22 = _mm512_cvtps_pd(f1);
+                                __m512d tmp11 = _mm512_mul_pd(mul_tmp1d, _mm512_mul_pd(df_now1, freq21));
+                                __m512d tmp12 = _mm512_mul_pd(mul_tmp1d, _mm512_mul_pd(df_now2, freq22));
+
+                                __m512d tmp21 = _mm512_mul_pd(mul_tmp2d, _mm512_mul_pd(freq21, freq21));
+                                __m512d tmp22 = _mm512_mul_pd(mul_tmp2d, _mm512_mul_pd(freq22, freq22));
+                                __m512d chi1d = _mm512_add_pd(_mm512_sub_pd(tmp11, tmp21), phase_shift_cond);
+                                __m512d chi2d = _mm512_add_pd(_mm512_sub_pd(tmp12, tmp22), phase_shift_cond);
+
+                                __m512d chi1 = _mm512_cvtps_pd(_mm512_cvtpd_ps(chi1d));
+                                __m512d chi2 = _mm512_cvtps_pd(_mm512_cvtpd_ps(chi2d));
+
+
 //                                __m512 df_now = _mm512_mul_ps(a_con, ofive);
 
 //                                    float chi = M_PI * lambda * df_now * freq2 -
 //                                                M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2
 //                                                + phase_shift;
                                 //M_PI * lambda * df_now * freq2
-                                __m512 tmp1 = _mm512_mul_ps(mul_tmp1, _mm512_mul_ps(df_now, freq2));
+//                                __m512 tmp1 = _mm512_mul_ps(mul_tmp1, _mm512_mul_ps(df_now, freq2));
 
                                 //M_PI_2 * Cs * lambda * lambda * lambda * freq2 * freq2
-                                __m512 tmp2 = _mm512_mul_ps(mul_tmp2, _mm512_mul_ps(freq2, freq2));
+//                                __m512 tmp2 = _mm512_mul_ps(mul_tmp2, _mm512_mul_ps(freq2, freq2));
 
                                 //cal
 
-                                __m512 chi = _mm512_add_ps(_mm512_sub_ps(tmp1, tmp2), phase_shift_con);
+//                                __m512 chi = _mm512_add_ps(_mm512_sub_ps(tmp1, tmp2), phase_shift_con);
 
                                 //double rrr = chi - a_w_cos;
 
-                                __m256 chi0 = _mm512_extractf32x8_ps(chi, 0);
-                                __m256 chi1 = _mm512_extractf32x8_ps(chi, 1);
-                                __m512d rr0 = _mm512_abs_pd(_mm512_sub_pd(_mm512_cvtps_pd(chi0), a_w_cos_con));
-                                __m512d rr1 = _mm512_abs_pd(_mm512_sub_pd(_mm512_cvtps_pd(chi1), a_w_cos_con));
+//                                __m256 chi0 = _mm512_extractf32x8_ps(chi, 0);
+//                                __m256 chi1 = _mm512_extractf32x8_ps(chi, 1);
+                                __m512d rr0 = _mm512_abs_pd(_mm512_sub_pd(chi1, a_w_cos_con));
+                                __m512d rr1 = _mm512_abs_pd(_mm512_sub_pd(chi2, a_w_cos_con));
 
                                 //int mul_base = 1;
 //                                rrr -= int(rrr / (2 * M_PI)) * 2 * M_PI;
@@ -996,12 +1022,12 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
 //
                                 rr0 = _mm512_sub_pd(rr0, _mm512_mul_pd(_mm512_cvt_roundepi64_pd(
-                                        _mm512_cvt_roundpd_epi64(_mm512_div_pd(rr0, M_PI_22con),
+                                        _mm512_cvt_roundpd_epi64(_mm512_mul_pd(rr0, M_PI_22con_div),
                                                                  _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC),
                                         _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC), M_PI_22con));
 
                                 rr1 = _mm512_sub_pd(rr1, _mm512_mul_pd(_mm512_cvt_roundepi64_pd(
-                                        _mm512_cvt_roundpd_epi64(_mm512_div_pd(rr1, M_PI_22con),
+                                        _mm512_cvt_roundpd_epi64(_mm512_mul_pd(rr1, M_PI_22con_div),
                                                                  _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC),
                                         _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC), M_PI_22con));
                                 __mmask8 mul_base0 = 0;
@@ -1047,27 +1073,27 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 __mmask16 big_base0 = mak_pre[mul_base0];
                                 __mmask16 big_base1 = mak_pre[mul_base1];
 
-//                                __m512 img1 = _mm512_load_ps(image + j * Nx2 + i * 2);
-//                                __m512 img2 = _mm512_load_ps(image + j * Nx2 + i * 2 + 16);
-//                                img1 = _mm512_mask_xor_ps(img1, big_base0, img1, __m512(xor_neg));
-//                                img2 = _mm512_mask_xor_ps(img2, big_base1, img2, __m512(xor_neg));
-////                                img1 = _mm512_mask_sub_ps(img1, big_base0, zero_con, img1);
-////                                img2 = _mm512_mask_sub_ps(img2, big_base1, zero_con, img2);
-//                                _mm512_store_ps(image + j * Nx2 + i * 2, img1);
-//                                _mm512_store_ps(image + j * Nx2 + i * 2 + 16, img2);
+                                __m512 img1 = _mm512_load_ps(image + j * Nx2 + i * 2);
+                                __m512 img2 = _mm512_load_ps(image + j * Nx2 + i * 2 + 16);
+                                img1 = _mm512_mask_xor_ps(img1, big_base0, img1, __m512(xor_neg));
+                                img2 = _mm512_mask_xor_ps(img2, big_base1, img2, __m512(xor_neg));
+//                                img1 = _mm512_mask_sub_ps(img1, big_base0, zero_con, img1);
+//                                img2 = _mm512_mask_sub_ps(img2, big_base1, zero_con, img2);
+                                _mm512_store_ps(image + j * Nx2 + i * 2, img1);
+                                _mm512_store_ps(image + j * Nx2 + i * 2 + 16, img2);
 
-                                for (int ii = 0; ii < 16; ii++) {
-                                    int idi = i * 2 + ii;
-                                    if ((big_base0 >> ii) & 1) {
-                                        image[idi + j * Nx2] *= -1;
-                                    }
-                                }
-                                for (int ii = 0; ii < 16; ii++) {
-                                    int idi = i * 2 + ii + 16;
-                                    if ((big_base1 >> ii) & 1) {
-                                        image[idi + j * Nx2] *= -1;
-                                    }
-                                }
+//                                for (int ii = 0; ii < 16; ii++) {
+//                                    int idi = i * 2 + ii;
+//                                    if ((big_base0 >> ii) & 1) {
+//                                        image[idi + j * Nx2] *= -1;
+//                                    }
+//                                }
+//                                for (int ii = 0; ii < 16; ii++) {
+//                                    int idi = i * 2 + ii + 16;
+//                                    if ((big_base1 >> ii) & 1) {
+//                                        image[idi + j * Nx2] *= -1;
+//                                    }
+//                                }
 
 //                                for (int ii = 0; ii < 16; ii++) {
 //                                    int idi = i + ii;

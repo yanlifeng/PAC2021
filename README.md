@@ -15,7 +15,9 @@
 - [x] omp in for z
 - [x] rewrite CTF vec 👋
 - [x] optimize write2DIm
-- [ ] 
+- [x] New data
+
+
 
 
 
