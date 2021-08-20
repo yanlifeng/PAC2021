@@ -878,6 +878,16 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     float pix = ctf.getPixelSize();
                     float Cs = ctf.getCs();
 
+
+                    float *atan_xy_cal = new float[Nx * Ny];
+#pragma omp parallel for num_threads(threadNumber)
+                    for (int j = 0; j < Ny; j++) {
+                        for (int i = 0; i < Nx; i++) {
+                            float alpha = atan_xy[j * Nx + i];
+                            atan_xy_cal[j * Nx + i] = (defocus1 - defocus2) * (cos(2 * (alpha - astig)));
+                        }
+                    }
+
                     __m512 zero_con = _mm512_set1_ps(0);
                     __m512d zero_cond = _mm512_set1_pd(0);
                     __m512 ofive = _mm512_set1_ps(0.5);
@@ -960,23 +970,24 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                                              _mm512_mul_ps(y_real_con, y_real_con));
 
 //                                float df_now = (A + (defocus1 - defocus2) * mycos(2 * (alpha - astig))) / 2.0;
-                                //TODO defocus1 - defocus2 is too small that remove it can even pass check
 //                                float df_now = (A + (defocus1 - defocus2) * (cos_atan_xy[j * Nx + i] * cos2ast +
 //                                                                             sin_atan_xy[j * Nx + i] * sin2ast)) / 2.0;
-                                //TODO is float(cos) right?
-//                                    float df_now = (A + (defocus1 - defocus2) * float(cos(2 * (alpha - astig)))) * 0.5;
+
 //                                __m512 cos_tmp = _mm512_cos_ps(
 //                                        _mm512_mul_ps(two_con, _mm512_sub_ps(alpha, astig_con)));
 //                                __m512 cos_tmp = zero_con;
 
 //                                cos_atan_xy[j * Nx + i] * cos2ast + sin_atan_xy[j * Nx + i] * sin2ast
-                                __m512 cos_tmp = _mm512_add_ps(
-                                        _mm512_mul_ps(_mm512_load_ps(cos_atan_xy + j * Nx + i), cos2ast_con),
-                                        _mm512_mul_ps(_mm512_load_ps(sin_atan_xy + j * Nx + i), sin2ast_con));
-                                //TODO why _mm512_cosh_ps get wrong answer
+//                                __m512 cos_tmp = _mm512_add_ps(
+//                                        _mm512_mul_ps(_mm512_load_ps(cos_atan_xy + j * Nx + i), cos2ast_con),
+//                                        _mm512_mul_ps(_mm512_load_ps(sin_atan_xy + j * Nx + i), sin2ast_con));
 
-                                __m512 df_now = _mm512_mul_ps(_mm512_add_ps(a_con, _mm512_mul_ps(d1_d2, cos_tmp)),
-                                                              ofive);
+                                //float df_now = (A + atan_xy_cal[j * Nx + i]) / 2.0;
+                                __m512 df_now = _mm512_mul_ps(
+                                        _mm512_add_ps(a_con, _mm512_load_ps(atan_xy_cal + j * Nx + i)), ofive);
+
+//                                __m512 df_now = _mm512_mul_ps(_mm512_add_ps(a_con, _mm512_mul_ps(d1_d2, cos_tmp)),
+//                                ofive);
                                 __m256 f0 = _mm512_extractf32x8_ps(df_now, 0);
                                 __m256 f1 = _mm512_extractf32x8_ps(df_now, 1);
                                 __m512d df_now1 = _mm512_cvtps_pd(f0);
@@ -1123,11 +1134,9 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                             for (; i < Nxh; i++) {
                                 float x_norm = i;
                                 float x_real = float(x_norm) / float(Nx) * (1 / pix);
-                                float alpha = atan_xy[j * Nx + i];
 
                                 float freq2 = x_real * x_real + y_real * y_real;
-                                float df_now = (A + (defocus1 - defocus2) * (cos_atan_xy[j * Nx + i] * cos2ast +
-                                                                             sin_atan_xy[j * Nx + i] * sin2ast)) / 2.0;
+                                float df_now = (A + atan_xy_cal[j * Nx + i]) / 2.0;
 //                                float df_now = (A + (defocus1 - defocus2) * (cos(2 * (alpha - astig)))) / 2.0;
 
 //                                float df_now = (A + (defocus1 - defocus2) * mycos(2 * (alpha - astig))) / 2.0;
@@ -1252,6 +1261,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     t3 = GetTime();
                     cost4 += t3 - t2;
                     t2 = GetTime();
+                    delete[]atan_xy_cal;
 
                     t3 = GetTime();
                     cost5 += t3 - t2;
