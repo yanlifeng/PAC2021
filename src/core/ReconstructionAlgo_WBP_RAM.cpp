@@ -856,7 +856,6 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     int zl = -int(h_tilt_max / 2);
                     int zr = int(h_tilt_max / 2);
 
-                    double a_w_cos = acos(w_cos);
 
                     t3 = GetTime();
                     cost2_5 += t3 - t2;
@@ -867,15 +866,27 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                     t3 = GetTime();
                     cost3 += t3 - t2;
                     t2 = GetTime();
+                    CTF ctf = ctf_para[n];
+
+                    float defocus1 = ctf.getDefocus1();
+                    float defocus2 = ctf.getDefocus2();
+                    float astig = ctf.getAstigmatism();
+                    float lambda = ctf.getLambda();
+                    float phase_shift = ctf.getPhaseShift();
+                    float w_cos = ctf.getW();
+                    float w_sin = sqrt(1 - w_cos * w_cos);
+                    float pix = ctf.getPixelSize();
+                    float Cs = ctf.getCs();
 
                     __m512 zero_con = _mm512_set1_ps(0);
                     __m512d zero_cond = _mm512_set1_pd(0);
                     __m512 ofive = _mm512_set1_ps(0.5);
                     __m512 two_con = _mm512_set1_ps(2);
                     __m512 neg_one = _mm512_set1_ps(-1);
-                    __m512d a_w_cos_con = _mm512_set1_pd(a_w_cos);
                     __m512i si_con = _mm512_set1_epi32(16);
                     __m512i xor_neg = _mm512_set1_epi32(0x80000000);
+                    __m512 Nx_con = _mm512_set1_ps(Nx);
+                    __m512 div_pix = _mm512_set1_ps(1 / pix);
 //
 #pragma omp parallel for num_threads(threadNumber)
                     for (int zz = zl; zz < zr; zz += defocus_step) {
@@ -883,22 +894,14 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                         int thread_id = omp_get_thread_num();
                         int n_z = (zz + int(h_tilt_max / 2)) / defocus_step;
                         float *image = stack_corrected + n_z * Nx2 * Ny;
-                        CTF ctf = ctf_para[n];
                         float z_offset = float(zz) + float(defocus_step - 1) / 2;
                         memcpy(image, bufc_pre, sizeof(float) * (Nx2 * Ny));
 
-                        float defocus1 = ctf.defocus1;
-                        float defocus2 = ctf.defocus2;
-                        float astig = ctf.astig;
-                        float lambda = ctf.lambda;
-                        float phase_shift = ctf.phase_shift;
-                        float w_sin = ctf.w_sin;
-                        float w_cos = ctf.w_cos;
-                        float pix = ctf.pix;
-                        float Cs = ctf.Cs;
+
                         float A = (defocus1 + defocus2 - 2 * z_offset * pix);
                         float sin2ast = sin(2 * astig);
                         float cos2ast = cos(2 * astig);
+                        double a_w_cos = acos(w_cos);
 
                         float div_Nx = 1.0 / float(Nx) * (1 / pix);
 
@@ -912,6 +915,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                         __m512d M_PI_23_con = _mm512_set1_pd(M_PI_2 * 3);
                         __m512d M_PI_22con = _mm512_set1_pd(2 * M_PI);
                         __m512d M_PI_22con_div = _mm512_set1_pd(1.0 / 2 / M_PI);
+                        __m512d a_w_cos_con = _mm512_set1_pd(a_w_cos);
 
 
                         //TODO
@@ -944,8 +948,8 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
                                 //float x_norm = i;
                                 __m512 x_norm = _mm512_cvtepi32_ps(idx);
 
-                                //float x_real = x_norm * div_Nx;
-                                __m512 x_real = _mm512_mul_ps(x_norm, div_con);
+                                //float x_real = x_norm / float(Nx) * (1 / pix);
+                                __m512 x_real = _mm512_mul_ps(_mm512_div_ps(x_norm, Nx_con), div_pix);
 
                                 //float alpha = atan_xy[j * Nx + i];
                                 __m512 alpha = _mm512_load_ps(atan_xy + j * Nx + i);
@@ -1022,14 +1026,22 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
 //
                                 rr0 = _mm512_sub_pd(rr0, _mm512_mul_pd(_mm512_cvt_roundepi64_pd(
-                                        _mm512_cvt_roundpd_epi64(_mm512_mul_pd(rr0, M_PI_22con_div),
-                                                                 _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC),
-                                        _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC), M_PI_22con));
+                                        _mm512_cvt_roundpd_epi64(
+                                                _mm512_mul_pd(rr0,
+                                                              M_PI_22con_div),
+                                                _MM_FROUND_TO_NEG_INF |
+                                                _MM_FROUND_NO_EXC),
+                                        _MM_FROUND_TO_NEG_INF |
+                                        _MM_FROUND_NO_EXC), M_PI_22con));
 
                                 rr1 = _mm512_sub_pd(rr1, _mm512_mul_pd(_mm512_cvt_roundepi64_pd(
-                                        _mm512_cvt_roundpd_epi64(_mm512_mul_pd(rr1, M_PI_22con_div),
-                                                                 _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC),
-                                        _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC), M_PI_22con));
+                                        _mm512_cvt_roundpd_epi64(
+                                                _mm512_mul_pd(rr1,
+                                                              M_PI_22con_div),
+                                                _MM_FROUND_TO_NEG_INF |
+                                                _MM_FROUND_NO_EXC),
+                                        _MM_FROUND_TO_NEG_INF |
+                                        _MM_FROUND_NO_EXC), M_PI_22con));
                                 __mmask8 mul_base0 = 0;
                                 __mmask8 mul_base1 = 0;
 //
@@ -1110,7 +1122,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 
                             for (; i < Nxh; i++) {
                                 float x_norm = i;
-                                float x_real = float(x_norm) * div_Nx;
+                                float x_real = float(x_norm) / float(Nx) * (1 / pix);
                                 float alpha = atan_xy[j * Nx + i];
 
                                 float freq2 = x_real * x_real + y_real * y_real;
@@ -1540,11 +1552,11 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         printf("ImSize %lld\n", 1ll * stack_final.getImSize() * Ny);
         printf("ImSize %zu\n", ImSize);
 
-        if (fseek(stack_final.getfp(), offset, SEEK_SET) != 0) {
+        if (fseek(stack_final.getFp(), offset, SEEK_SET) != 0) {
             printf("GG\n");
         }
 
-        int res = fwrite(stack_recon, 1, ImSize, stack_final.getfp());
+        int res = fwrite(stack_recon, 1, ImSize, stack_final.getFp());
         printf("res %d\n", res);
         printf("write t1 cost %.3f\n", GetTime() - tw);
         tw = GetTime();

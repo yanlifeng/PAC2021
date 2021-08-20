@@ -158,7 +158,7 @@ float MRC::getMean() {
     return m_header.dmean;
 }
 
-FILE *MRC::getfp() {
+FILE *MRC::getFp() {
     return m_fp;
 }
 

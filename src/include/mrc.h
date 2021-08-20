@@ -80,7 +80,7 @@ public:
 
     float getMean();
 
-    FILE *getfp();
+    FILE *getFp();
 
     int readAllData(void *buf);
 

@@ -139,7 +139,7 @@ if ("${CPU_VERSION}")
 
     foreach (MAINSRC ${MAIN_SOURCES})
         get_filename_component(MAINNAME ${MAINSRC} NAME_WE) # file name without directories or longest extension
-        set(MAINNAME "${MAINNAME}_lxy")
+        set(MAINNAME "${MAINNAME}_cpu")
         add_executable(${MAINNAME} ${MAINSRC})
         if (USE_INTEL_COMPILER)
             if (USE_INTEL_FFTW)
