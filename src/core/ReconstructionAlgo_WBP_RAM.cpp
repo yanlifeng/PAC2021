@@ -22,12 +22,17 @@
 #include "util.h"
 #include <sys/time.h>
 #include <cassert>
-
+#include <stdio.h> /* for perror() */
+#include <unistd.h> /* for syscall() */
+#include <sys/syscall.h> /* for __NR_* definitions */
+#include <linux/aio_abi.h> /* for AIO types and constants */
+#include <fcntl.h> /* O_RDWR */
+#include <string.h> /* memset() */
+#include <inttypes.h> /* uint64_t */
 #include "omp.h"
 
 #include <immintrin.h>
 
-#define mycos(x) (1-x*x/2+x*x*x*x/24)
 
 const int threadNumber = 64;
 
@@ -38,6 +43,23 @@ double GetTime() {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (double) tv.tv_sec + (double) tv.tv_usec / 1000000;
+}
+
+inline int io_setup(unsigned nr, aio_context_t *ctxp) {
+    return syscall(__NR_io_setup, nr, ctxp);
+}
+
+inline int io_destroy(aio_context_t ctx) {
+    return syscall(__NR_io_destroy, ctx);
+}
+
+inline int io_submit(aio_context_t ctx, long nr, struct iocb **iocbpp) {
+    return syscall(__NR_io_submit, ctx, nr, iocbpp);
+}
+
+inline int
+io_getevents(aio_context_t ctx, long min_nr, long max_nr, struct io_event *events, struct timespec *timeout) {
+    return syscall(__NR_io_getevents, ctx, min_nr, max_nr, events, timeout);
 }
 
 static void buf2fft(float *buf, float *fft, int nx, int ny) {
@@ -309,7 +331,7 @@ ReconstructionAlgo_WBP_RAM::~ReconstructionAlgo_WBP_RAM() {
 
 }
 
-void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara, map<string, string> &outputPara) {
+void ReconstructionAlgo_WBP_RAM::doReconstruction(map <string, string> &inputPara, map <string, string> &outputPara) {
 
     double t_start = GetTime();
     double tt_t = GetTime();
@@ -1556,18 +1578,7 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
         stack_final.createMRC_empty(stack_orig.getNx(), h, stack_orig.getNy(), 2); // (x,z,y)
         // loop: Ny (number of xz-slices)
 //        printf("outdir %s\n", outdir.c_str());
-        size_t ImSize = (size_t) stack_final.getImSize() * Ny;
-        size_t offset = 1024 + stack_final.getSymdatasize();
 
-        printf("ImSize %lld\n", 1ll * stack_final.getImSize() * Ny);
-        printf("ImSize %zu\n", ImSize);
-
-        if (fseek(stack_final.getFp(), offset, SEEK_SET) != 0) {
-            printf("GG\n");
-        }
-
-        int res = fwrite(stack_recon, 1, ImSize, stack_final.getFp());
-        printf("res %d\n", res);
         printf("write t1 cost %.3f\n", GetTime() - tw);
         tw = GetTime();
 
@@ -1612,13 +1623,91 @@ void ReconstructionAlgo_WBP_RAM::doReconstruction(map<string, string> &inputPara
 //        for (int j = 0; j < stack_orig.getNy(); j++) {
 //            delete[] stack_recon[j];
 //        }
-        delete[] stack_recon;
+        printf("offset %d\n", stack_final.getSymdatasize());
+        size_t ImSize = (size_t) stack_final.getImSize() * Ny;
+        size_t offset = 1024 + stack_final.getSymdatasize();
+
+        printf("ImSize %lld\n", 1ll * stack_final.getImSize() * Ny);
+        printf("ImSize %zu\n", ImSize);
+
+//        if (fseek(stack_final.getFp(), offset, SEEK_SET) != 0) {
+//            printf("GG\n");
+//        }
+//
+//        int res = fwrite(stack_recon, 1, ImSize, stack_final.getFp());
+//        printf("res %d\n", res);
+//        delete[] stack_recon;
+
         printf("write t6 cost %.3f\n", GetTime() - tw);
         tw = GetTime();
         stack_final.close();
+
+        printf("write close cost %.3f\n", GetTime() - tw);
+        tw = GetTime();
+
+        //optimize fclose with aio
+
+        {
+            double t00 = GetTime();
+
+            int N = ImSize;
+            aio_context_t ctx;
+            struct iocb cb;
+            struct iocb *cbs[1];
+            struct io_event events[1];
+            int ret;
+            int fd;
+            int i;
+
+            printf("p1 cost %lf\n", GetTime() - t00);
+            t00 = GetTime();
+
+            fd = open(output_mrc.c_str(), O_RDWR | O_CREAT, S_IRWXU);
+            if (fd < 0) {
+                perror("open error");
+            }
+            ctx = 0;
+            ret = io_setup(128, &ctx);
+            printf("after io_setup ctx:%ld\n", ctx);
+            if (ret < 0) {
+                perror("io_setup error");
+            } /* setup I/O control block */
+            memset(&cb, 0, sizeof(cb));
+            cb.aio_fildes = fd;
+            cb.aio_lio_opcode = IOCB_CMD_PWRITE;/* command-specific options */
+            cb.aio_buf = (uint64_t) stack_recon;
+            cb.aio_offset = 1024;
+            cb.aio_nbytes = N * sizeof(float);
+            cbs[0] = &cb;
+            ret = io_submit(ctx, 1, cbs);
+            if (ret != 1) {
+                if (ret < 0)
+                    perror("io_submit error");
+                else
+                    fprintf(stderr, "could not sumbit IOs");
+            } /* get the reply */
+            printf("p2 cost %lf\n", GetTime() - t00);
+            t00 = GetTime();
+
+            ret = io_destroy(ctx);
+            if (ret < 0) {
+                perror("io_destroy error");
+            }
+
+
+            printf("p3 cost %lf\n", GetTime() - t00);
+            t00 = GetTime();
+
+            delete[] stack_recon;
+            printf("p4 cost %lf\n", GetTime() - t00);
+            t00 = GetTime();
+        }
+
+
         printf("write t7 cost %.3f\n", GetTime() - tw);
         tw = GetTime();
         cout << "Done" << endl;
+
 
         printf("write part cost %.3f\n", GetTime() - t_write);
 
